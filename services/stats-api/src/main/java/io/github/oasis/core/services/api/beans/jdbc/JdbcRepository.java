@@ -432,6 +432,8 @@ public class JdbcRepository implements OasisRepository {
         dto.setName(elementDef.getName());
         dto.setDescription(elementDef.getDescription());
         dto.setVersion(elementDef.getVersion());
+        dto.setIconUrl(elementDef.getIconUrl());
+        dto.setWeight(elementDef.getWeight());
 
         elementDao.updateElement(id, dto, System.currentTimeMillis());
         return toElementDef(elementDao.readElement(id));

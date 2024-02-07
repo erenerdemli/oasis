@@ -31,6 +31,8 @@ public class ElementUpdateDto implements Serializable {
 
     private String name;
     private String description;
+    private String iconUrl;
+    private Integer weight;
     private int version;
 
 }

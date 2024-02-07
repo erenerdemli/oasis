@@ -66,6 +66,7 @@ public class ElementCreateRequest implements Serializable {
         @NotBlank(message = "Parameter 'metadata.name' is mandatory")
         private String name;
         private String description;
+        private String iconUrl;
         private Integer version;
 
         public ElementMetadata(String id, String name, String description) {
@@ -75,7 +76,7 @@ public class ElementCreateRequest implements Serializable {
         }
 
         public SimpleElementDefinition toElementDefinition() {
-            return new SimpleElementDefinition(id, name, description, version);
+            return new SimpleElementDefinition(id, name, description, iconUrl, version);
         }
     }
 }

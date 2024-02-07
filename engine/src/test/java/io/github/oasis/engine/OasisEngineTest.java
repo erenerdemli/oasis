@@ -183,7 +183,7 @@ public class OasisEngineTest {
             ElementDef.ElementDefBuilder elementDef = ElementDef.builder()
                     .elementId(rule.getId())
                     .gameId(gameId)
-                    .metadata(new SimpleElementDefinition(rule.getId(), rule.getName(), rule.getDescription()));
+                    .metadata(new SimpleElementDefinition(rule.getId(), rule.getName(), rule.getDescription(), rule.getIconUrl(), rule.getWeight()));
 
             if (gameDef != null) {
                 EngineMessage message = gameDef.getRuleDefinitions().stream()
@@ -206,7 +206,7 @@ public class OasisEngineTest {
                     .type(def.getType())
                     .data(def.getData())
                     .gameId(gameId)
-                    .metadata(new SimpleElementDefinition(rule.getId(), rule.getName(), rule.getDescription()))
+                    .metadata(new SimpleElementDefinition(rule.getId(), rule.getName(), rule.getDescription(), rule.getIconUrl(), rule.getWeight()))
                     .build();
             oasisRepository.addNewElement(gameId, elementDef);
             engine.submit(Messages.createRuleAddMessage(gameId, rule, null));

@@ -142,7 +142,9 @@ public class JdbcMetadataProvider implements OasisMetadataSupport {
         return new SimpleElementDefinition(
             elementDef.getMetadata().getId(),
             elementDef.getMetadata().getName(),
-            elementDef.getMetadata().getDescription()
+            elementDef.getMetadata().getDescription(),
+            elementDef.getMetadata().getIconUrl(),
+            elementDef.getMetadata().getWeight()
         );
     }
 

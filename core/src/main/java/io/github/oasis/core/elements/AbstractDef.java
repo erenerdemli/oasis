@@ -56,6 +56,7 @@ public abstract class AbstractDef<S extends BaseSpecification> implements Valida
     private String id;
     private String name;
     private String description;
+    private String iconUrl;
     private String type;
 
     private S spec;

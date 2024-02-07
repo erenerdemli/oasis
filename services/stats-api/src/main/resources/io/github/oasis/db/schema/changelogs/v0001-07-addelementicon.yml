@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: add_col_icon_url_element
+      author: isuruw
+      changes:
+        - addColumn:
+            tableName: OA_ELEMENT
+            columns:
+              - column:
+                  name: icon_url
+                  type: varchar(512)

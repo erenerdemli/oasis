@@ -88,6 +88,8 @@ public class ElementService extends AbstractOasisService implements IElementServ
                 elementId,
                 updateRequest.getName(),
                 updateRequest.getDescription(),
+                updateRequest.getIconUrl(),
+                updateRequest.getWeight(),
                 updateRequest.getVersion());
         return backendRepository.updateElement(gameId, elementId, metadata);
     }

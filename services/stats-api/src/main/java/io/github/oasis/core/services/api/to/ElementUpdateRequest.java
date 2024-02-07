@@ -32,6 +32,8 @@ public class ElementUpdateRequest implements Serializable {
 
     private String name;
     private String description;
+    private String iconUrl;
+    private Integer weight;
 
     @Positive(message = "The 'version' field must be specified to represent updating entity!")
     private int version;

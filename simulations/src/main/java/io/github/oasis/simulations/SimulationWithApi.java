@@ -20,9 +20,9 @@
 package io.github.oasis.simulations;
 
 import io.github.oasis.core.Game;
-import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.elements.GameDef;
+import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.external.messages.EngineMessage;
 import io.github.oasis.core.model.EventSource;
@@ -40,19 +40,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.Signature;
+import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.function.Function;
 
 /**
@@ -163,12 +155,14 @@ public class SimulationWithApi extends Simulation {
             String id = ruleDefinition.getData().get("id").toString();
             String name = ruleDefinition.getData().get("name").toString();
             String description = ruleDefinition.getData().get("description").toString();
+            String iconUrl = ruleDefinition.getData().get("iconUrl").toString();
+            Number weight = ((Number)ruleDefinition.getData().get("weight"));
             String type = ruleDefinition.getData().get("type").toString();
             ElementDef elementDef = ElementDef.builder()
                     .type(type)
                     .gameId(gameId)
                     .data(ruleDefinition.getData())
-                    .metadata(new SimpleElementDefinition(id, name, description))
+                    .metadata(new SimpleElementDefinition(id, name, description, iconUrl, weight == null ? 0 : weight.intValue()))
                     .build();
 
             System.out.println("Adding rule: " + elementDef);

@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: add_col_weight_element
+      author: isuruw
+      changes:
+        - addColumn:
+            tableName: OA_ELEMENT
+            columns:
+              - column:
+                  name: weight
+                  type: int
+                  defaultValue: 0

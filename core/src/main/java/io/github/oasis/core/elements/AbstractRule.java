@@ -42,6 +42,8 @@ public abstract class AbstractRule implements Serializable {
     private final String id;
     private String name;
     private String description;
+    private String iconUrl;
+    private Integer weight;
     private Set<String> flags = new HashSet<>();
     private EventTypeMatcher eventTypeMatcher;
     private TimeRangeMatcher timeRangeMatcher;

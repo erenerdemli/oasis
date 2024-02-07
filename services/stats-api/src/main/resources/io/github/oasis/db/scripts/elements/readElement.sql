@@ -6,6 +6,8 @@ SELECT
     def_id AS elementId,
     version AS version,
     description AS elementDescription,
+    icon_url AS elementIconUrl,
+    weight AS elementWeight,
     is_active AS active
 FROM
     OA_ELEMENT

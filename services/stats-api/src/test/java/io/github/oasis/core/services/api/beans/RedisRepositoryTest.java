@@ -630,7 +630,7 @@ class RedisRepositoryTest {
         ElementDef elementDef = redisRepository.addNewElement(element.getGameId(), element);
 
         SimpleElementDefinition md = new SimpleElementDefinition(element.getElementId(), "Bonus Points 2",
-                elementDef.getMetadata().getDescription());
+                elementDef.getMetadata().getDescription(), elementDef.getMetadata().getIconUrl(), elementDef.getMetadata().getWeight());
         redisRepository.updateElement(elementDef.getGameId(), elementDef.getElementId(), md);
         ElementDef updatedElement = redisRepository.readElement(elementDef.getGameId(), elementDef.getElementId());
         Assertions.assertEquals("Bonus Points 2", updatedElement.getMetadata().getName());
@@ -713,7 +713,7 @@ class RedisRepositoryTest {
 
         ElementDef bonusPoints = redisRepository.readElement(1, "ELE0001");
         SimpleElementDefinition md = new SimpleElementDefinition(bonusPoints.getElementId(),
-                "Bonus Points 2", bonusPoints.getMetadata().getDescription());
+                "Bonus Points 2", bonusPoints.getMetadata().getDescription(), bonusPoints.getMetadata().getIconUrl(), bonusPoints.getMetadata().getWeight());
         redisRepository.updateElement(1, bonusPoints.getElementId(), md);
 
         List<SimpleElementDefinition> points = redisRepository.listAllElementDefinitions(1, "points");
@@ -765,7 +765,7 @@ class RedisRepositoryTest {
     private ElementDef createElement(String id, String name, String type) {
         return ElementDef.builder()
                 .elementId(id)
-                .metadata(new SimpleElementDefinition(id, name, ""))
+                .metadata(new SimpleElementDefinition(id, name, "","", 0))
                 .type(type)
                 .gameId(1)
                 .data(new HashMap<>())

@@ -5,6 +5,8 @@ SELECT
     oa.name AS elementName,
     oa.def_id AS elementId,
     oa.description AS elementDescription,
+    oa.icon_url AS elementIconUrl,
+    oa.weight AS elementWeight,
     oa.is_active AS active,
     oa.version AS version,
     oad.def_data AS data

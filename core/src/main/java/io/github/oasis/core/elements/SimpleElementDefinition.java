@@ -38,12 +38,16 @@ public class SimpleElementDefinition implements Serializable {
     private String id;
     private String name;
     private String description;
+    private String iconUrl;
+    private Integer weight;
     private Integer version;
 
-    public SimpleElementDefinition(String id, String name, String description) {
+    public SimpleElementDefinition(String id, String name, String description, String iconUrl, Integer weight) {
         this.id = id;
         this.name = name;
         this.description = description;
+        this.iconUrl = iconUrl;
+        this.weight = weight;
         this.version = null;
     }
 }
