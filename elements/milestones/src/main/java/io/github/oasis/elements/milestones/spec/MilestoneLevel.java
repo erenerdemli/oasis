@@ -37,4 +37,9 @@ public class MilestoneLevel implements Serializable {
     @DefinitionDetails(description = "Threshold value to reach this level.")
     private BigDecimal milestone;
 
+    @DefinitionDetails(description = "Level Name")
+    private String name;
+
+    @DefinitionDetails(description = "Level Icon Url.")
+    private String iconUrl;
 }
