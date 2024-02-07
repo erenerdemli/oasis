@@ -69,7 +69,7 @@ public class GameEventHandler {
                     .partitionWiseOffsets(partitionWiseOffset)
                     .build();
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOG.error("Error occurred while reading game events!", e);
             return KafkaEventsProcessingResult.builder()
                     .partitionWiseOffsets(partitionWiseOffset)

@@ -27,6 +27,8 @@ import io.github.oasis.ext.kafkastream.KafkaEventsProcessingResult;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -42,6 +44,8 @@ public class KafkaConsumerRunner implements Runnable, Closeable {
     protected GameEventHandler handler;
     protected final String topic;
     protected volatile boolean running = true;
+
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaConsumerRunner.class);
 
     public KafkaConsumerRunner(String forTheTopic) {
         this.topic = forTheTopic;
@@ -71,8 +75,10 @@ public class KafkaConsumerRunner implements Runnable, Closeable {
                 }
 
             }
-        } catch (WakeupException e) {
+        }catch (WakeupException e) {
             // ignore
+        } catch(Exception x){
+            LOG.error("Unable to process Kafka Consumer Message ",x);
         } finally {
             consumer.close();
         }

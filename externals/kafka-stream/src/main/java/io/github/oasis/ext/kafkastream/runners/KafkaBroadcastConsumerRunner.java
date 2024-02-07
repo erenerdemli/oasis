@@ -99,7 +99,9 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
             }
         } catch (WakeupException e) {
             // ignore
-        } finally {
+        } catch(Exception x){
+            LOG.error("Unable to process Kafka Broadcast Message ",x);
+        }finally {
             consumer.close();
         }
 
@@ -129,7 +131,7 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
             }
             return SUCCESS_RESULT;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             // shallow exception
             LOG.error("Error while processing broadcast message: ", e);
             return KafkaEventsProcessingResult.builder().exceptionThrown(e).build();
