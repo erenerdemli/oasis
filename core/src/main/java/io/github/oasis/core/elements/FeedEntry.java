@@ -63,6 +63,7 @@ public class FeedEntry implements Serializable {
         private long userId;
         private long teamId;
         private String ruleId;
+        private String externalId;
 
         public static FeedScope fromEventScope(EventScope scope, String ruleId) {
             return FeedScope.builder()
@@ -71,6 +72,7 @@ public class FeedEntry implements Serializable {
                     .sourceId(scope.getSourceId())
                     .teamId(scope.getTeamId())
                     .userId(scope.getUserId())
+                    .externalId(scope.getExternalId())
                     .build();
         }
     }

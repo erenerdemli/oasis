@@ -34,11 +34,14 @@ public class EventScope implements Comparable<EventScope> {
     private final long userId;
     private final long teamId;
 
-    public EventScope(int gameId, int sourceId, long userId, long teamId) {
+    private String externalId;
+
+    public EventScope(int gameId, int sourceId, long userId, long teamId, String externalId) {
         this.gameId = gameId;
         this.sourceId = sourceId;
         this.userId = userId;
         this.teamId = teamId;
+        this.externalId = externalId;
     }
 
     public int getGameId() {
@@ -57,6 +60,10 @@ public class EventScope implements Comparable<EventScope> {
         return teamId;
     }
 
+    public String getExternalId() {
+        return externalId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -65,12 +72,14 @@ public class EventScope implements Comparable<EventScope> {
         return gameId == that.gameId &&
                 sourceId == that.sourceId &&
                 userId == that.userId &&
-                teamId == that.teamId;
+                teamId == that.teamId
+                && Objects.equals(externalId, that.externalId)
+                ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(gameId, sourceId, userId, teamId);
+        return Objects.hash(gameId, sourceId, userId, teamId, externalId);
     }
 
     @Override
@@ -79,6 +88,7 @@ public class EventScope implements Comparable<EventScope> {
                 .thenComparing(EventScope::getSourceId)
                 .thenComparing(EventScope::getUserId)
                 .thenComparing(EventScope::getTeamId)
+                .thenComparing(EventScope::getExternalId)
                 .compare(this, o);
     }
 
@@ -89,6 +99,7 @@ public class EventScope implements Comparable<EventScope> {
                 ", source=" + sourceId +
                 ", user=" + userId +
                 ", team=" + teamId +
+                ", externalId=" + externalId +
                 '}';
     }
 }
