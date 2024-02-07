@@ -25,7 +25,9 @@ package io.github.oasis.engine.element.points.spec;
 import io.github.oasis.core.annotations.DefinitionDetails;
 import io.github.oasis.core.elements.spec.AbstractFeedDataDef;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -33,6 +35,8 @@ import java.math.BigDecimal;
 /**
  * @author Isuru Weerarathna
  */
+@Getter
+@Setter
 @SuperBuilder
 @AllArgsConstructor
 @NoArgsConstructor

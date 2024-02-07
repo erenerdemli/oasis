@@ -22,12 +22,16 @@ package io.github.oasis.elements.badges.spec;
 import io.github.oasis.core.annotations.DefinitionDetails;
 import io.github.oasis.core.elements.spec.AbstractFeedDataDef;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
  * @author Isuru Weerarathna
  */
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
