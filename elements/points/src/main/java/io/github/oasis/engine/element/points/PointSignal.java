@@ -73,6 +73,7 @@ public class PointSignal extends Signal implements EventCreatable {
                         .type(PointIDs.FEED_TYPE_POINTS_SCORED)
                         .scope(FeedEntry.FeedScope.fromEventScope(getEventScope(), getRuleId()))
                         .data(PointFeedData.builder()
+                                .ruleId(getRuleId())
                                 .pointId(getPointId())
                                 .pointsScored(getScore())
                                 .build()
