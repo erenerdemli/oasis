@@ -30,3 +30,4 @@ node_modules/
 .tmpdata
 
 buildscripts/modules/*.jar
+akademi/
