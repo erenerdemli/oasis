@@ -348,4 +348,14 @@ public class BackendRepository implements OasisRepository {
     public OasisRepository getAdminRepository() {
         return adminRepository;
     }
+
+    @Override
+    public void cleanGameProgress(int gameId) {
+        adminRepository.cleanGameProgress(gameId);
+    }
+
+    @Override
+    public void cleanGameDef(int gameId) {
+        adminRepository.cleanGameDef(gameId);
+    }
 }

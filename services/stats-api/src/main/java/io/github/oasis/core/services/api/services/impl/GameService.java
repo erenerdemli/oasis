@@ -50,6 +50,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import io.github.oasis.core.external.Db;
+import io.github.oasis.core.external.DbContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import java.io.IOException;
+import java.util.Set;
+
 /**
  * @author Isuru Weerarathna
  */
@@ -69,11 +76,56 @@ public class GameService extends AbstractOasisService implements IGameService {
             "stop", GameState.STOPPED,
             "stopped", GameState.STOPPED);
 
+    private final Db engineDb;
     private ApplicationEventPublisher publisher;
 
-    public GameService(@AdminDbRepository OasisRepository backendRepository, ApplicationEventPublisher eventPublisher) {
+    public GameService(@AdminDbRepository OasisRepository backendRepository,
+                       @Qualifier("enginedb") Db engineDb,
+                       ApplicationEventPublisher eventPublisher) {
         super(backendRepository);
+        this.engineDb = engineDb;
         this.publisher = eventPublisher;
+    }
+
+    @Override
+    @Transactional
+    public void resetGame(int gameId, boolean hardReset) throws OasisApiException {
+        // Validate game exists first (will throw if not found)
+        backendRepository.readGame(gameId);
+
+        // Clear Redis data
+        try (DbContext db = engineDb.createContext()) {
+            // Both soft and hard reset clear all game runtime data
+            // Pattern 1: All keys starting with {g<gameId>}: (user stats, leaderboards, rule state)
+            deleteKeysByPattern(db, "{g" + gameId + "}:*");
+            // Pattern 2: User-specific keys with game in middle (e.g., u2:{g1}:firstevents)
+            deleteKeysByPattern(db, "u*:{g" + gameId + "}:*");
+
+            if (hardReset) {
+                // Hard reset also clears game definition cache
+                deleteKeysByPattern(db, "oasis:{g" + gameId + "}:*");
+            }
+        } catch (IOException e) {
+            throw new OasisApiException(ErrorCodes.DB_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        // Clear MySQL data
+        backendRepository.cleanGameProgress(gameId);
+
+        if (hardReset) {
+            backendRepository.cleanGameDef(gameId);
+            // Reset status to CREATED
+            backendRepository.updateGameStatus(gameId, GameState.CREATED.name(), System.currentTimeMillis());
+        }
+    }
+
+    private void deleteKeysByPattern(DbContext db, String pattern) {
+        Set<String> keys = db.allKeys(pattern);
+        if (keys != null && !keys.isEmpty()) {
+            for (String key : keys) {
+                db.removeKey(key);
+            }
+        }
     }
 
     @Override

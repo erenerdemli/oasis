@@ -49,6 +49,9 @@ public interface IPlayerTeamDao {
     PlayerObject readPlayerByEmail(@Bind("email") String playerEmail);
 
     @SqlUpdate
+    void removeAllPlayersFromGame(@Bind("gameId") int gameId);
+
+    @SqlUpdate
     @GetGeneratedKeys(DaoConstants.ID)
     int insertPlayer(@BindBean PlayerObject newPlayer, @Bind("ts") long ts);
 

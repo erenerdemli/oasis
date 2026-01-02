@@ -48,6 +48,8 @@ public interface IGameService {
 
     PaginatedResult<Game> listAllGames(String offset, int pageSize);
 
+    void resetGame(int gameId, boolean hardReset) throws OasisApiException;
+
     Game getGameByName(String name);
 
     Game changeStatusOfGameWithoutPublishing(int gameId, String newStatus, Long updatedAt) throws OasisApiException;

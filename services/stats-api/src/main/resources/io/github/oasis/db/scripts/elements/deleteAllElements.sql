@@ -1,0 +1,1 @@
+DELETE FROM OA_ELEMENT WHERE game_id = :gameId

@@ -103,6 +103,9 @@ public interface IEventSourceDao {
     @SqlUpdate
     void removeEventSourceFromGame(@Bind("gameId") int gameId, @Bind("eventSourceId") int eventSourceId);
 
+    @SqlUpdate
+    void unlinkAllFromGame(@Bind("gameId") int gameId);
+
     @SqlQuery
     List<Integer> readEventSourceGames(@Bind("eventSourceId") int eventSourceId);
 }

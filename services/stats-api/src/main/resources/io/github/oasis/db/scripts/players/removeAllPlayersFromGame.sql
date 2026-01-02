@@ -1,0 +1,1 @@
+DELETE FROM OA_PLAYER_TEAM WHERE game_id = :gameId

@@ -91,4 +91,13 @@ public interface IElementDao {
     @SqlQuery
     List<RankInfo> readAllRanks(@Bind("gameId") int gameId);
 
+    @SqlUpdate
+    void deleteAllElementData(@Bind("gameId") int gameId);
+
+    @SqlUpdate
+    void deleteAllElements(@Bind("gameId") int gameId);
+
+    @SqlUpdate
+    void deleteAllRanks(@Bind("gameId") int gameId);
+
 }

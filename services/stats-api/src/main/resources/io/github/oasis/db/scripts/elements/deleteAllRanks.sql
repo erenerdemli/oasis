@@ -1,0 +1,1 @@
+DELETE FROM OA_RANK_DEF WHERE game_id = :gameId

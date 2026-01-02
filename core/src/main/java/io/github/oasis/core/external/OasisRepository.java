@@ -87,5 +87,7 @@ public interface OasisRepository {
     RankInfo addRank(int gameId, RankInfo newRank);
     List<RankInfo> listAllRanks(int gameId);
 
+    void cleanGameProgress(int gameId);
+    void cleanGameDef(int gameId);
 
 }

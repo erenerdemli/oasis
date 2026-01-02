@@ -523,4 +523,27 @@ public class JdbcRepository implements OasisRepository {
         status.setUpdatedAt(dto.getUpdatedAt());
         return status;
     }
+
+    @Override
+    public void cleanGameProgress(int gameId) {
+        // Redis data is cleared in the service layer
+        // No MySQL progress data to clear for soft reset
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(value = ID.CACHE_ELEMENTS, allEntries = true),
+            @CacheEvict(value = ID.CACHE_ELEMENTS_META, allEntries = true),
+            @CacheEvict(value = ID.CACHE_RANKS, key = "#gameId")
+    })
+    public void cleanGameDef(int gameId) {
+        // Delete element data first (FK constraint), then elements, then ranks
+        elementDao.deleteAllElementData(gameId);
+        elementDao.deleteAllElements(gameId);
+        elementDao.deleteAllRanks(gameId);
+        // Remove player-team associations for this game
+        playerTeamDao.removeAllPlayersFromGame(gameId);
+        // Unlink event sources from game (but don't delete them as they may be shared)
+        eventSourceDao.unlinkAllFromGame(gameId);
+    }
 }

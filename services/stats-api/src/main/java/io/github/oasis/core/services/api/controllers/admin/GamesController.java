@@ -102,7 +102,16 @@ public class GamesController extends AbstractController {
                            @Valid @RequestBody GameUpdateRequest request) throws OasisException {
         return gameService.updateGame(gameId, request);
     }
-
+    @Operation(
+            summary = "Resets game data. mode=hard deletes everything. mode=soft deletes user progress only.",
+            tags = {"admin"}
+    )
+    @ForAdmin
+    @PostMapping(path = "/games/{gameId}/reset")
+    public void resetGame(@PathVariable("gameId") Integer gameId,
+                          @RequestParam(name = "hard", defaultValue = "false") boolean hardReset) throws OasisException {
+        gameService.resetGame(gameId, hardReset);
+    }
     @Operation(
             summary = "Deletes an existing game",
             description = "When a game is deleted, all of its associated elements, event sources will be deleted as well.",
