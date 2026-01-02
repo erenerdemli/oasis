@@ -1013,9 +1013,10 @@ public class RedisRepository implements OasisRepository {
     }
 
     @Override
-    public void cleanGameDef(int gameId) {
+    public void cleanGameDef(int gameId, boolean deleteRanks, boolean archive) {
         // RedisRepository is used as a cache layer, not for game data cleanup.
         // Direct Redis key cleanup is handled in GameService via engineDb.
         throw new UnsupportedOperationException("Game cleanup is not supported via cache repository");
     }
+}
 }

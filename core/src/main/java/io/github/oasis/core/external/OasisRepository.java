@@ -88,6 +88,8 @@ public interface OasisRepository {
     List<RankInfo> listAllRanks(int gameId);
 
     void cleanGameProgress(int gameId);
-    void cleanGameDef(int gameId);
+    void cleanGameDef(int gameId, boolean deleteRanks, boolean archive);
+
+}
 
 }

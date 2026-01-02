@@ -534,16 +534,19 @@ public class JdbcRepository implements OasisRepository {
     @Caching(evict = {
             @CacheEvict(value = ID.CACHE_ELEMENTS, allEntries = true),
             @CacheEvict(value = ID.CACHE_ELEMENTS_META, allEntries = true),
-            @CacheEvict(value = ID.CACHE_RANKS, key = "#gameId")
+            @CacheEvict(value = ID.CACHE_RANKS, key = "#gameId", condition = "#deleteRanks")
     })
-    public void cleanGameDef(int gameId) {
-        // Delete element data first (FK constraint), then elements, then ranks
-        elementDao.deleteAllElementData(gameId);
-        elementDao.deleteAllElements(gameId);
-        elementDao.deleteAllRanks(gameId);
-        // Remove player-team associations for this game
-        playerTeamDao.removeAllPlayersFromGame(gameId);
-        // Unlink event sources from game (but don't delete them as they may be shared)
-        eventSourceDao.unlinkAllFromGame(gameId);
+    public void cleanGameDef(int gameId, boolean deleteRanks, boolean archive) {
+        if (archive) {
+            // Soft delete element data and elements (set is_active = 0)
+            elementDao.softDeleteAllElements(gameId);
+        } else {
+            // Hard delete element data and elements
+            elementDao.deleteAllElements(gameId);
+        }
+
+        if (deleteRanks) {
+            elementDao.deleteAllRanks(gameId);
+        }
     }
 }

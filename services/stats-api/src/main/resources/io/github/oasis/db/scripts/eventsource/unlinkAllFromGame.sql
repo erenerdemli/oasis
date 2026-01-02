@@ -1,1 +1,0 @@
-DELETE FROM OA_EVENT_SOURCE_GAME WHERE game_id = :gameId

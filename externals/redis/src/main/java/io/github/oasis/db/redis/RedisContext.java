@@ -156,6 +156,11 @@ public class RedisContext implements DbContext {
     }
 
     @Override
+    public void renameKey(String sourceKey, String targetKey) {
+        client.getKeys().rename(sourceKey, targetKey);
+    }
+
+    @Override
     public void incrementAllInSorted(BigDecimal value, String commonMember, List<String> baseKeys) {
         List<Object> allArgs = List.copyOf(baseKeys);
         runScript(ZINCRALL, allArgs, value.doubleValue(), commonMember);

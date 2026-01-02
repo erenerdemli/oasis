@@ -89,41 +89,52 @@ public class GameService extends AbstractOasisService implements IGameService {
 
     @Override
     @Transactional
-    public void resetGame(int gameId, boolean hardReset) throws OasisApiException {
+    public void resetGame(int gameId, boolean hardReset, boolean archive, boolean deleteRanks) throws OasisApiException {
         // Validate game exists first (will throw if not found)
         backendRepository.readGame(gameId);
+
+        long timestamp = System.currentTimeMillis();
+        String archivePrefix = "archived:" + timestamp + ":";
 
         // Clear Redis data
         try (DbContext db = engineDb.createContext()) {
             // Both soft and hard reset clear all game runtime data
             // Pattern 1: All keys starting with {g<gameId>}: (user stats, leaderboards, rule state)
-            deleteKeysByPattern(db, "{g" + gameId + "}:*");
+            processKeysByPattern(db, "{g" + gameId + "}:*", archive, archivePrefix);
             // Pattern 2: User-specific keys with game in middle (e.g., u2:{g1}:firstevents)
-            deleteKeysByPattern(db, "u*:{g" + gameId + "}:*");
+            processKeysByPattern(db, "u*:{g" + gameId + "}:*", archive, archivePrefix);
 
             if (hardReset) {
                 // Hard reset also clears game definition cache
-                deleteKeysByPattern(db, "oasis:{g" + gameId + "}:*");
+                processKeysByPattern(db, "oasis:{g" + gameId + "}:*", archive, archivePrefix);
             }
         } catch (IOException e) {
             throw new OasisApiException(ErrorCodes.DB_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         // Clear MySQL data
+        // Soft Reset: Only clears progress (which is mostly Redis). 
+        // We keep player associations so they don't have to re-join teams.
         backendRepository.cleanGameProgress(gameId);
 
         if (hardReset) {
-            backendRepository.cleanGameDef(gameId);
+            // Hard Reset: Delete game definitions
+            backendRepository.cleanGameDef(gameId, deleteRanks, archive);
+            
             // Reset status to CREATED
             backendRepository.updateGameStatus(gameId, GameState.CREATED.name(), System.currentTimeMillis());
         }
     }
 
-    private void deleteKeysByPattern(DbContext db, String pattern) {
+    private void processKeysByPattern(DbContext db, String pattern, boolean archive, String archivePrefix) {
         Set<String> keys = db.allKeys(pattern);
         if (keys != null && !keys.isEmpty()) {
             for (String key : keys) {
-                db.removeKey(key);
+                if (archive) {
+                    db.renameKey(key, archivePrefix + key);
+                } else {
+                    db.removeKey(key);
+                }
             }
         }
     }

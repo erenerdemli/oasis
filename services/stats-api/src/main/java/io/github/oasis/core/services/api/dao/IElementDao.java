@@ -92,10 +92,28 @@ public interface IElementDao {
     List<RankInfo> readAllRanks(@Bind("gameId") int gameId);
 
     @SqlUpdate
-    void deleteAllElementData(@Bind("gameId") int gameId);
+    void deleteAllElementDataByGameId(@Bind("gameId") int gameId);
 
     @SqlUpdate
-    void deleteAllElements(@Bind("gameId") int gameId);
+    void softDeleteAllElementDataByGameId(@Bind("gameId") int gameId);
+
+    @SqlUpdate
+    void deleteAllElementsByGameId(@Bind("gameId") int gameId);
+
+    @SqlUpdate
+    void softDeleteAllElementsByGameId(@Bind("gameId") int gameId);
+
+    @Transaction
+    default void deleteAllElements(int gameId) {
+        deleteAllElementDataByGameId(gameId);
+        deleteAllElementsByGameId(gameId);
+    }
+
+    @Transaction
+    default void softDeleteAllElements(int gameId) {
+        softDeleteAllElementDataByGameId(gameId);
+        softDeleteAllElementsByGameId(gameId);
+    }
 
     @SqlUpdate
     void deleteAllRanks(@Bind("gameId") int gameId);

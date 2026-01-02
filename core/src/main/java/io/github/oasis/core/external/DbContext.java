@@ -54,4 +54,8 @@ public interface DbContext extends Closeable {
     Object runScript(String scriptName, List<Object> keys, Object... values);
 
     void queueOffer(String listName, String data);
+
+    default void renameKey(String sourceKey, String targetKey) {
+        throw new UnsupportedOperationException("renameKey is not supported by this DbContext implementation");
+    }
 }

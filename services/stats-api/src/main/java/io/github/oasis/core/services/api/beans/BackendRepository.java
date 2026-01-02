@@ -355,7 +355,7 @@ public class BackendRepository implements OasisRepository {
     }
 
     @Override
-    public void cleanGameDef(int gameId) {
-        adminRepository.cleanGameDef(gameId);
+    public void cleanGameDef(int gameId, boolean deleteRanks, boolean archive) {
+        adminRepository.cleanGameDef(gameId, deleteRanks, archive);
     }
 }
