@@ -22,8 +22,6 @@
 
 package io.github.oasis.core.services.api.configs;
 
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigValue;
 import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
@@ -34,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
@@ -48,12 +45,12 @@ public class StreamConfigs {
 
     @Bean
     public EventStreamFactory createStreamFactory(OasisConfigs oasisConfigs) {
-        String dispatcherImpl = oasisConfigs.get("oasis.dispatcher.impl", null);
+        String dispatcherImpl = oasisConfigs.get("oasis.eventstream.impl", null);
         if (StringUtils.isBlank(dispatcherImpl)) {
-            throw new IllegalStateException("Mandatory dispatcher implementation has not specified!");
+            throw new IllegalStateException("Mandatory eventstream implementation has not specified!");
         }
 
-        LOG.info("Initializing dispatcher implementation {}...", dispatcherImpl);
+        LOG.info("Initializing eventstream implementation {}...", dispatcherImpl);
 
         if (StringUtils.startsWith(dispatcherImpl, "classpath:")) {
             String dispatcherClz = StringUtils.substringAfter(dispatcherImpl, "classpath:");
@@ -65,14 +62,14 @@ public class StreamConfigs {
 
     @Bean
     public EventDispatcher createStreamDispatcher(OasisConfigs oasisConfigs, EventStreamFactory eventStreamFactory) throws Exception {
-        String dispatcherImpl = oasisConfigs.get("oasis.dispatcher.impl", null);
+        String dispatcherImpl = oasisConfigs.get("oasis.eventstream.impl", null);
 
-        LOG.info("Dispatcher loaded from {}", dispatcherImpl);
+        LOG.info("Eventstream loaded from {}", dispatcherImpl);
         EventDispatcher dispatcher = eventStreamFactory.getDispatcher();
-        Map<String, Object> config = toMap(oasisConfigs.getConfigRef().getConfig("oasis.dispatcher.configs"));
+        Map<String, Object> config = oasisConfigs.getObject("oasis.eventstream.configs");
         EventDispatcher.DispatcherContext context = () -> config;
         dispatcher.init(context);
-        LOG.info("Dispatcher {} successfully loaded!", dispatcherImpl);
+        LOG.info("Eventstream {} successfully loaded!", dispatcherImpl);
 
         return dispatcher;
     }
@@ -90,27 +87,18 @@ public class StreamConfigs {
             return (EventStreamFactory) referredClz.getDeclaredConstructor().newInstance();
 
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Dispatcher implementation cannot be found in classpath! " + dispatcherImpl);
+            throw new IllegalStateException("Eventstream implementation cannot be found in classpath! " + dispatcherImpl);
         }
     }
 
     private EventStreamFactory loadFromServiceLoader(String dispatcherImpl) {
         return ServiceLoader.load(EventStreamFactory.class)
                 .stream()
-                .peek(eventStreamFactoryProvider -> LOG.info("Found dispatcher implementation: {}", eventStreamFactoryProvider.type().getName()))
+                .peek(eventStreamFactoryProvider -> LOG.info("Found eventstream implementation: {}", eventStreamFactoryProvider.type().getName()))
                 .filter(eventStreamFactoryProvider -> dispatcherImpl.equals(eventStreamFactoryProvider.type().getName()))
                 .map(ServiceLoader.Provider::get)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Unknown dispatcher implementation provided! " + dispatcherImpl));
+                .orElseThrow(() -> new IllegalStateException("Unknown eventstream implementation provided! " + dispatcherImpl));
     }
-
-    private Map<String, Object> toMap(Config config) {
-        Map<String, Object> destination = new HashMap<>();
-        for (Map.Entry<String, ConfigValue> entry : config.entrySet()) {
-            destination.put(entry.getKey(), entry.getValue().unwrapped());
-        }
-        return destination;
-    }
-
 
 }
