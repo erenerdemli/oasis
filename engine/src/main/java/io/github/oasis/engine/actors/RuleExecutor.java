@@ -27,6 +27,8 @@ import io.github.oasis.core.elements.Signal;
 import io.github.oasis.engine.EngineContext;
 import io.github.oasis.engine.actors.cmds.EventMessage;
 import io.github.oasis.engine.actors.cmds.OasisRuleMessage;
+import io.github.oasis.engine.actors.cmds.RuleRemovedMessage;
+import io.github.oasis.engine.actors.cmds.RuleUpdatedMessage;
 import io.github.oasis.engine.actors.cmds.StartRuleExecutionCommand;
 import io.github.oasis.engine.ext.ExternalParty;
 import io.github.oasis.engine.ext.ExternalPartyImpl;
@@ -86,6 +88,18 @@ public class RuleExecutor extends OasisBaseActor {
     }
 
     private void ruleModified(OasisRuleMessage message) {
+        // Clear cached processor first when rule is removed or updated
+        // so that a new processor will be created with the updated rule
+        if (message instanceof RuleRemovedMessage) {
+            cache.remove(((RuleRemovedMessage) message).getRuleId());
+            log.info("[{}#{}] Removed cached processor for rule: {}", parentId, myId,
+                    ((RuleRemovedMessage) message).getRuleId());
+        } else if (message instanceof RuleUpdatedMessage) {
+            cache.remove(((RuleUpdatedMessage) message).getRule().getId());
+            log.info("[{}#{}] Cleared cached processor for updated rule: {}", parentId, myId,
+                    ((RuleUpdatedMessage) message).getRule().getId());
+        }
+
         RulesImpl.GameRules rules = getGameRuleRef(message.getGameId());
         message.applyTo(rules);
     }
