@@ -23,11 +23,15 @@ package io.github.oasis.core.services.api.services.impl;
 
 import io.github.oasis.core.Game;
 import io.github.oasis.core.configs.OasisConfigs;
+import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
+import io.github.oasis.core.external.messages.EngineMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import io.github.oasis.core.external.messages.GameState;
+import io.github.oasis.core.model.GameStatus;
 import io.github.oasis.core.services.api.services.IGameService;
+import io.github.oasis.core.services.events.RuleChangeEvent;
 import io.github.oasis.core.services.exceptions.OasisApiException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +40,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -127,6 +132,147 @@ public class EngineManagerImplTest {
         } catch (IOException e) {
             Assertions.fail("Should not expected to fail!");
         }
+    }
+
+    // ============================================================
+    // Tests for notifyRuleChange
+    // ============================================================
+
+    @Test
+    void notifyRuleChange_GameRunning_ShouldBroadcastAddMessage() throws Exception {
+        // Setup: Game is running (status = "started")
+        GameStatus runningStatus = new GameStatus();
+        runningStatus.setGameId(GAME_ID);
+        runningStatus.setStatus("started");
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(runningStatus);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
+
+        // Verify: Should broadcast message to engine
+        ArgumentCaptor<EngineMessage> messageCaptor = ArgumentCaptor.forClass(EngineMessage.class);
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(messageCaptor.capture());
+
+        EngineMessage capturedMessage = messageCaptor.getValue();
+        assertEquals(EngineMessage.GAME_RULE_ADDED, capturedMessage.getType());
+        assertEquals(GAME_ID, capturedMessage.getScope().getGameId());
+        assertEquals("core:point", capturedMessage.getImpl());
+    }
+
+    @Test
+    void notifyRuleChange_GameRunning_ShouldBroadcastUpdateMessage() throws Exception {
+        // Setup: Game is running
+        GameStatus runningStatus = new GameStatus();
+        runningStatus.setGameId(GAME_ID);
+        runningStatus.setStatus("STARTED"); // Test case-insensitivity
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(runningStatus);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.UPDATE, GAME_ID, elementDef);
+
+        // Verify
+        ArgumentCaptor<EngineMessage> messageCaptor = ArgumentCaptor.forClass(EngineMessage.class);
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(messageCaptor.capture());
+
+        EngineMessage capturedMessage = messageCaptor.getValue();
+        assertEquals(EngineMessage.GAME_RULE_UPDATED, capturedMessage.getType());
+    }
+
+    @Test
+    void notifyRuleChange_GameRunning_ShouldBroadcastRemoveMessage() throws Exception {
+        // Setup: Game is running
+        GameStatus runningStatus = new GameStatus();
+        runningStatus.setGameId(GAME_ID);
+        runningStatus.setStatus("started");
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(runningStatus);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.REMOVE, GAME_ID, elementDef);
+
+        // Verify
+        ArgumentCaptor<EngineMessage> messageCaptor = ArgumentCaptor.forClass(EngineMessage.class);
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(messageCaptor.capture());
+
+        EngineMessage capturedMessage = messageCaptor.getValue();
+        assertEquals(EngineMessage.GAME_RULE_REMOVED, capturedMessage.getType());
+    }
+
+    @Test
+    void notifyRuleChange_GameNotRunning_ShouldNotBroadcast() throws Exception {
+        // Setup: Game is stopped
+        GameStatus stoppedStatus = new GameStatus();
+        stoppedStatus.setGameId(GAME_ID);
+        stoppedStatus.setStatus("stopped");
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(stoppedStatus);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
+
+        // Verify: Should NOT broadcast to engine
+        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+    }
+
+    @Test
+    void notifyRuleChange_GamePaused_ShouldNotBroadcast() throws Exception {
+        // Setup: Game is paused
+        GameStatus pausedStatus = new GameStatus();
+        pausedStatus.setGameId(GAME_ID);
+        pausedStatus.setStatus("paused");
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(pausedStatus);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.UPDATE, GAME_ID, elementDef);
+
+        // Verify: Should NOT broadcast to engine (game not running)
+        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+    }
+
+    @Test
+    void notifyRuleChange_GameStatusNull_ShouldNotBroadcast() throws Exception {
+        // Setup: No game status found
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(null);
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
+
+        // Verify: Should NOT broadcast to engine
+        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+    }
+
+    @Test
+    void notifyRuleChange_GameStatusCheckThrowsException_ShouldNotBroadcast() throws Exception {
+        // Setup: Exception when checking game status
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID))
+                .thenThrow(new RuntimeException("Database error"));
+
+        ElementDef elementDef = createTestElementDef();
+
+        // Act - should not throw
+        engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
+
+        // Verify: Should NOT broadcast to engine (error getting status, assume not running)
+        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+    }
+
+    private ElementDef createTestElementDef() {
+        return ElementDef.builder()
+                .elementId("test.point.rule")
+                .gameId(GAME_ID)
+                .type("core:point")
+                .data(Map.of("id", "test.point.rule", "name", "Test Point Rule"))
+                .build();
     }
 
     private static class MockedEngineSubscription implements EngineManagerSubscription {

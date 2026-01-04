@@ -20,8 +20,10 @@
 package io.github.oasis.core.services.api.services;
 
 import io.github.oasis.core.Game;
+import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.external.messages.GameState;
 import io.github.oasis.core.services.api.exceptions.EngineManagerException;
+import io.github.oasis.core.services.events.RuleChangeEvent;
 
 /**
  * Interface to manipulate game engine thorough API.
@@ -30,6 +32,25 @@ import io.github.oasis.core.services.api.exceptions.EngineManagerException;
  */
 public interface IEngineManager {
 
+    /**
+     * Notifies the engine about a game status change (e.g., started, paused, stopped).
+     *
+     * @param state the new game state
+     * @param game  the game reference
+     * @throws EngineManagerException if notification fails
+     */
     void notifyGameStatusChange(GameState state, Game game) throws EngineManagerException;
+
+    /**
+     * Notifies the engine about a rule change (add, update, or remove).
+     * This method only sends the notification if the associated game is currently running.
+     * If the game is not running, the change will be picked up when the game starts.
+     *
+     * @param changeType  the type of change (ADD, UPDATE, or REMOVE)
+     * @param gameId      the game ID to which the rule belongs
+     * @param elementDef  the element definition (rule details)
+     * @throws EngineManagerException if notification fails
+     */
+    void notifyRuleChange(RuleChangeEvent.ChangeType changeType, int gameId, ElementDef elementDef) throws EngineManagerException;
 
 }

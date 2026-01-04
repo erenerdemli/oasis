@@ -29,11 +29,13 @@ import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.messages.EngineMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import io.github.oasis.core.external.messages.GameState;
+import io.github.oasis.core.model.GameStatus;
 import io.github.oasis.core.services.api.exceptions.EngineManagerException;
 import io.github.oasis.core.services.api.exceptions.ErrorCodes;
 import io.github.oasis.core.services.api.services.IElementService;
 import io.github.oasis.core.services.api.services.IEngineManager;
 import io.github.oasis.core.services.api.services.IGameService;
+import io.github.oasis.core.services.events.RuleChangeEvent;
 import io.github.oasis.core.services.exceptions.OasisApiException;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -145,5 +147,91 @@ public class EngineManagerImpl implements IEngineManager, Closeable {
             LOG.info("Closing dispatcher...");
             this.dispatchSupport.close();
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>This method checks if the game is currently running (status = "started") before
+     * sending the rule change notification. If the game is not running, the notification
+     * is skipped since the rules will be loaded when the game starts.</p>
+     */
+    @Override
+    public void notifyRuleChange(RuleChangeEvent.ChangeType changeType, int gameId, ElementDef elementDef) throws EngineManagerException {
+        // Only notify engine if the game is currently running
+        // If the game is not running, rules will be loaded when game starts
+        if (!isGameRunning(gameId)) {
+            LOG.debug("Game {} is not running. Skipping rule change notification for element: {}",
+                    gameId, elementDef.getElementId());
+            return;
+        }
+
+        LOG.info("Notifying engine of rule change: type={}, gameId={}, elementId={}",
+                changeType, gameId, elementDef.getElementId());
+
+        try {
+            EngineMessage message = createRuleChangeMessage(changeType, gameId, elementDef);
+            dispatchSupport.broadcast(message);
+            LOG.info("Rule change notification sent successfully: type={}, gameId={}, elementId={}",
+                    changeType, gameId, elementDef.getElementId());
+        } catch (Exception e) {
+            throw new EngineManagerException(ErrorCodes.UNABLE_TO_CHANGE_GAME_STATE, e);
+        }
+    }
+
+    /**
+     * Checks if the specified game is currently running.
+     *
+     * @param gameId the game ID to check
+     * @return true if the game status is "started", false otherwise
+     */
+    private boolean isGameRunning(int gameId) {
+        try {
+            GameStatus status = gameService.getCurrentGameStatus(gameId);
+            if (status == null) {
+                return false;
+            }
+            // Game is running if status is "started" (case-insensitive)
+            return "started".equalsIgnoreCase(status.getStatus());
+        } catch (Exception e) {
+            LOG.warn("Unable to determine game status for gameId={}. Assuming game is not running.", gameId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Creates an EngineMessage for the rule change based on the change type.
+     *
+     * @param changeType  the type of rule change
+     * @param gameId      the game ID
+     * @param elementDef  the element definition
+     * @return the constructed EngineMessage
+     */
+    private EngineMessage createRuleChangeMessage(RuleChangeEvent.ChangeType changeType, int gameId, ElementDef elementDef) {
+        EngineMessage message = new EngineMessage();
+        EngineMessage.Scope scope = new EngineMessage.Scope(gameId);
+        message.setScope(scope);
+
+        switch (changeType) {
+            case ADD:
+                message.setType(EngineMessage.GAME_RULE_ADDED);
+                message.setImpl(elementDef.getType());
+                message.setData(elementDef.getData());
+                break;
+            case UPDATE:
+                message.setType(EngineMessage.GAME_RULE_UPDATED);
+                message.setImpl(elementDef.getType());
+                message.setData(elementDef.getData());
+                break;
+            case REMOVE:
+                message.setType(EngineMessage.GAME_RULE_REMOVED);
+                message.setImpl(elementDef.getType());
+                message.setData(elementDef.getData());
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown rule change type: " + changeType);
+        }
+
+        return message;
     }
 }
