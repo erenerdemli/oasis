@@ -20,7 +20,12 @@
 package io.github.oasis.core.services.api.to;
 
 import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.io.Serializable;
 
@@ -28,6 +33,10 @@ import java.io.Serializable;
  * @author Isuru Weerarathna
  */
 @Data
+@ToString
+@Builder(toBuilder = true)
+@AllArgsConstructor
+@NoArgsConstructor
 public class ElementUpdateRequest implements Serializable {
 
     private String name;

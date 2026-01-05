@@ -89,7 +89,4 @@ public interface OasisRepository {
 
     void cleanGameProgress(int gameId);
     void cleanGameDef(int gameId, boolean deleteRanks, boolean archive);
-
-}
-
 }

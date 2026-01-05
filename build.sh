@@ -24,7 +24,7 @@ compose_hide_logs="kafka,zookeeper"
 # ///////////////////// BUILD PROJECT ////////////////////////////////////
 
 if [ "$skip_build_project" != "true" ]; then
-  MVN_ARGS=""
+  MVN_ARGS="-Pmysql"
   if [ "$do_clean" == "true" ]; then
     MVN_ARGS+="clean"
   fi

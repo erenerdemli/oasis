@@ -1019,4 +1019,3 @@ public class RedisRepository implements OasisRepository {
         throw new UnsupportedOperationException("Game cleanup is not supported via cache repository");
     }
 }
-}

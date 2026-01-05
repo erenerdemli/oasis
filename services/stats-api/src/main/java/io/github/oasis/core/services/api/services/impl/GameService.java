@@ -109,7 +109,7 @@ public class GameService extends AbstractOasisService implements IGameService {
                 processKeysByPattern(db, "oasis:{g" + gameId + "}:*", archive, archivePrefix);
             }
         } catch (IOException e) {
-            throw new OasisApiException(ErrorCodes.DB_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new OasisApiException(ErrorCodes.DB_ERROR, HttpStatus.INTERNAL_SERVER_ERROR.value(),"Unable to reset game data.", e);
         }
 
         // Clear MySQL data
