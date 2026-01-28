@@ -32,6 +32,7 @@ import io.github.oasis.engine.EngineContext;
 import io.github.oasis.engine.actors.cmds.EngineShutdownCommand;
 import io.github.oasis.engine.actors.cmds.EventMessage;
 import io.github.oasis.engine.actors.cmds.GameEventMessage;
+import io.github.oasis.engine.actors.cmds.Messages;
 import io.github.oasis.engine.actors.cmds.OasisRuleMessage;
 import io.github.oasis.engine.actors.cmds.internal.GameStatusAsk;
 import io.github.oasis.engine.actors.cmds.internal.GameStatusReply;
@@ -39,6 +40,7 @@ import io.github.oasis.engine.actors.cmds.internal.InternalAsk;
 import io.github.oasis.engine.actors.routers.GameRouting;
 import io.github.oasis.engine.ext.ExternalParty;
 import io.github.oasis.engine.ext.ExternalPartyImpl;
+import io.github.oasis.engine.ext.RulesImpl;
 import org.json.simple.JSONObject;
 
 import java.io.IOException;
@@ -168,12 +170,22 @@ public class OasisSupervisor extends OasisBaseActor {
                 contextMap.put(gameId, loadGameContext(gameId));
                 publishGameState(gameId, GameState.STARTED);
             } else {
-                mainLog.info("Game {} is already running in this engine. So skipping re-registration.", gameId);
+                mainLog.info("Game {} is already running in this engine. Reloading rules on soft restart.", gameId);
+                RulesImpl.GameRules rules = getGameRuleRef(gameId);
+                if (rules != null) {
+                    rules.clearRules();
+                }
+                gameProcessors.route(Messages.createRuleCacheClearMessage(gameId, null), getSelf());
             }
             eventSource.ackGameStateChanged(gameCommand);
             mainLog.info("Game engine '{}' is ready to run the game id: {}. Ack game state: {}",
                     engineContext.id(), gameId, status);
         } else if (status == GameCommand.GameLifecycle.REMOVE) {
+            RulesImpl.GameRules rules = getGameRuleRef(gameId);
+            if (rules != null) {
+                rules.clearRules();
+            }
+            gameProcessors.route(Messages.createRuleCacheClearMessage(gameId, null), getSelf());
             gamesRunning.remove(gameId);
             contextMap.remove(gameId);
 

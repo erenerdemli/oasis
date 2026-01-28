@@ -76,6 +76,10 @@ public final class RulesImpl implements Extension {
             }
         }
 
+        public void clearRules() {
+            ruleMap.clear();
+        }
+
         public Iterator<AbstractRule> getAllRulesForEvent(Event event) {
             return ruleMap.values().stream().filter(AbstractRule::isActive).iterator();
         }

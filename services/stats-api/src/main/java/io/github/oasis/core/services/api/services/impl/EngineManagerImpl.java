@@ -152,18 +152,17 @@ public class EngineManagerImpl implements IEngineManager, Closeable {
     /**
      * {@inheritDoc}
      *
-     * <p>This method checks if the game is currently running (status = "started") before
-     * sending the rule change notification. If the game is not running, the notification
-     * is skipped since the rules will be loaded when the game starts.</p>
+    * <p>This method checks if the game is currently running (status = "started") before
+    * sending the rule change notification. If the game is not marked as running in the admin DB,
+    * it will still attempt to notify the engine so that stale status does not block live updates.</p>
      */
     @Override
     public void notifyRuleChange(RuleChangeEvent.ChangeType changeType, int gameId, ElementDef elementDef) throws EngineManagerException {
-        // Only notify engine if the game is currently running
-        // If the game is not running, rules will be loaded when game starts
+        // Try to notify engine even if game status is stale in admin DB.
+        // If the game is not actually running, the engine will safely ignore the message.
         if (!isGameRunning(gameId)) {
-            LOG.debug("Game {} is not running. Skipping rule change notification for element: {}",
-                    gameId, elementDef.getElementId());
-            return;
+            LOG.warn("Game {} is not marked as running. Attempting rule change notification for element: {}",
+                gameId, elementDef.getElementId());
         }
 
         LOG.info("Notifying engine of rule change: type={}, gameId={}, elementId={}",

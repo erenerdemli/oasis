@@ -56,4 +56,10 @@ public final class Messages {
         return message;
     }
 
+    public static RuleCacheClearMessage createRuleCacheClearMessage(int gameId, Object messageId) {
+        RuleCacheClearMessage message = new RuleCacheClearMessage(messageId);
+        message.setGameId(gameId);
+        return message;
+    }
+
 }
