@@ -83,6 +83,12 @@ public class BadgeSpecification extends BaseSpecification {
         super.validate();
 
         Validate.notEmpty(kind, "Mandatory field 'kind' must be specified to identify what kind of badge to offer!");
+        if (STREAK_N_KIND.equals(kind) || TIME_BOUNDED_STREAK_KIND.equals(kind)) {
+            Validate.notNull(retainTime, "Field 'retainTime' must be specified for streak badges!");
+        }
+        if (TIME_BOUNDED_STREAK_KIND.equals(kind)) {
+            Validate.notNull(timeRange, "Field 'timeRange' must be specified for time bounded streak badges!");
+        }
 
         if (condition != null) condition.validate();
         if (aggregatorExtractor != null) aggregatorExtractor.validate();
