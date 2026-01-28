@@ -111,8 +111,8 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
     }
 
     private KafkaEventsProcessingResult processEvent(ConsumerRecords<String, String> polledRecords) {
-        try {
-            for (ConsumerRecord<String, String> record : polledRecords) {
+        for (ConsumerRecord<String, String> record : polledRecords) {
+            try {
                 EngineMessage message = MessageSerializer.deserialize(record.value(), EngineMessage.class);
 
                 LOG.trace("Message received: {}", message);
@@ -125,16 +125,13 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
                         .build();
                 message.setMessageId(messageId);
 
-
                 LOG.debug("Submitting message with id {} to engine...", messageId);
                 sinkRef.submit(message);
+            } catch (Exception e) {
+                LOG.error("Error while processing broadcast message at {}-{}@{}. Skipping.",
+                        record.topic(), record.partition(), record.offset(), e);
             }
-            return SUCCESS_RESULT;
-
-        } catch (Exception e) {
-            // shallow exception
-            LOG.error("Error while processing broadcast message: ", e);
-            return KafkaEventsProcessingResult.builder().exceptionThrown(e).build();
         }
+        return SUCCESS_RESULT;
     }
 }
