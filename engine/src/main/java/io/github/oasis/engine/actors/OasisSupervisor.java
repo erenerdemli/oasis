@@ -170,12 +170,7 @@ public class OasisSupervisor extends OasisBaseActor {
                 contextMap.put(gameId, loadGameContext(gameId));
                 publishGameState(gameId, GameState.STARTED);
             } else {
-                mainLog.info("Game {} is already running in this engine. Reloading rules on soft restart.", gameId);
-                RulesImpl.GameRules rules = getGameRuleRef(gameId);
-                if (rules != null) {
-                    rules.clearRules();
-                }
-                gameProcessors.route(Messages.createRuleCacheClearMessage(gameId, null), getSelf());
+                mainLog.info("Game {} is already running in this engine. Skipping re-registration.", gameId);
             }
             eventSource.ackGameStateChanged(gameCommand);
             mainLog.info("Game engine '{}' is ready to run the game id: {}. Ack game state: {}",
