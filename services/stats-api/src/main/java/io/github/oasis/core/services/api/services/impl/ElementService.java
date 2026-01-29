@@ -92,16 +92,27 @@ public class ElementService extends AbstractOasisService implements IElementServ
                 .type(request.getType())
                 .build();
 
-        statsApiContext.validateElement(elementDef);
+        try {
+            statsApiContext.validateElement(elementDef);
 
-        ElementDef savedElement = backendRepository.addNewElement(gameId, elementDef);
+            ElementDef savedElement = backendRepository.addNewElement(gameId, elementDef);
 
-        // Publish rule change event to notify running game engines
-        // The listener will check if the game is running before forwarding to engine
-        publishRuleChangeEvent(RuleChangeEvent.ChangeType.ADD, gameId, savedElement);
-        LOG.info("Element added: gameId={}, elementId={}", gameId, savedElement.getElementId());
+            // Publish rule change event to notify running game engines
+            // The listener will check if the game is running before forwarding to engine
+            publishRuleChangeEvent(RuleChangeEvent.ChangeType.ADD, gameId, savedElement);
+            LOG.info("Element added: gameId={}, elementId={}", gameId, savedElement.getElementId());
 
-        return savedElement;
+            return savedElement;
+        } catch (RuntimeException e) {
+            var metadata = request.getMetadata();
+            LOG.warn("Failed to add element: gameId={}, elementId={}, type={}, name={}",
+                    gameId,
+                    metadata != null ? metadata.getId() : null,
+                    request.getType(),
+                    metadata != null ? metadata.getName() : null,
+                    e);
+            throw e;
+        }
     }
 
     @Override
