@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -112,8 +113,9 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
 
     private KafkaEventsProcessingResult processEvent(ConsumerRecords<String, String> polledRecords) {
         for (ConsumerRecord<String, String> record : polledRecords) {
+            EngineMessage message = null;
             try {
-                EngineMessage message = MessageSerializer.deserialize(record.value(), EngineMessage.class);
+                message = MessageSerializer.deserialize(record.value(), EngineMessage.class);
 
                 LOG.trace("Message received: {}", message);
 
@@ -128,10 +130,56 @@ public class KafkaBroadcastConsumerRunner extends KafkaConsumerRunner {
                 LOG.debug("Submitting message with id {} to engine...", messageId);
                 sinkRef.submit(message);
             } catch (Exception e) {
-                LOG.error("Error while processing broadcast message at {}-{}@{}. Skipping.",
-                        record.topic(), record.partition(), record.offset(), e);
+                if (message != null) {
+                    Integer gameId = message.getScope() != null ? message.getScope().getGameId() : null;
+                    Map<String, Object> data = message.getData();
+                    Object ruleId = null;
+                    Object ruleName = null;
+                    if (data != null) {
+                        ruleId = data.get("id");
+                        if (ruleId == null) {
+                            ruleId = data.get("ruleId");
+                        }
+                        if (ruleId == null) {
+                            ruleId = data.get("elementId");
+                        }
+                        ruleName = data.get("name");
+                    }
+                    LOG.error(
+                            "Error while processing broadcast message at {}-{}@{} (gameId={}, type={}, impl={}, ruleId={}, name={}, messageId={}). Skipping.",
+                            record.topic(),
+                            record.partition(),
+                            record.offset(),
+                            gameId,
+                            message.getType(),
+                            message.getImpl(),
+                            ruleId,
+                            ruleName,
+                            message.getMessageId(),
+                            e
+                    );
+                } else {
+                    LOG.error(
+                            "Error while processing broadcast message at {}-{}@{} (unable to deserialize, value={} ). Skipping.",
+                            record.topic(),
+                            record.partition(),
+                            record.offset(),
+                            abbreviate(record.value(), 512),
+                            e
+                    );
+                }
             }
         }
         return SUCCESS_RESULT;
+    }
+
+    private static String abbreviate(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength) + "...(truncated)";
     }
 }
