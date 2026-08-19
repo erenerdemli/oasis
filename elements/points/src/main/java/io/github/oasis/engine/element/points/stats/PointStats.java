@@ -113,6 +113,40 @@ public class PointStats extends AbstractStatsApiService {
     }
 
     @ApiResponse(
+            responseCode = "200", description = "Total points for a set of users",
+            content = {
+                    @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = UserPointsBulkSummary.class))
+            }
+    )
+    @OasisStatEndPoint(path = "/elements/points/summary/bulk",
+            summary = "Total points for many users of a game in one call")
+    public UserPointsBulkSummary getUserPointsBulk(@QueryPayload UserPointsBulkRequest request) throws OasisApiException {
+        Validators.checkBulkPointRequest(request);
+
+        try (DbContext db = getDbPool().createContext()) {
+
+            UserPointsBulkSummary summary = new UserPointsBulkSummary();
+            summary.setGameId(request.getGameId());
+
+            // One hash read per user, all on a single connection. The game's
+            // keys share the {g<gameId>} hash tag, so in cluster mode they stay
+            // on one node and this does not fan out across the cluster.
+            for (Long userId : request.getUserIds()) {
+                String key = PointIDs.getGameUserPointsSummary(request.getGameId(), userId);
+                BigDecimal allPoints = Numbers.asDecimal(db.MAP(key).getValue("all"));
+                // A user the engine has never scored gets zero, not an absent
+                // row: the caller is joining this onto a roster it already holds.
+                summary.addUser(userId, allPoints == null ? BigDecimal.ZERO : allPoints);
+            }
+
+            return summary;
+        } catch (IOException e) {
+            throw new ApiQueryException("Error while querying for bulk points summary!", e);
+        }
+    }
+
+    @ApiResponse(
             responseCode = "200", description = "Get leaderboard",
             content = {
                     @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,

@@ -23,6 +23,7 @@ import io.github.oasis.core.model.TimeScope;
 import io.github.oasis.core.services.exceptions.ApiValidationException;
 import io.github.oasis.core.utils.Utils;
 import io.github.oasis.engine.element.points.stats.to.LeaderboardRequest;
+import io.github.oasis.engine.element.points.stats.to.UserPointsBulkRequest;
 import io.github.oasis.engine.element.points.stats.to.UserPointsRequest;
 import io.github.oasis.engine.element.points.stats.to.UserRankingRequest;
 import org.apache.commons.lang3.StringUtils;
@@ -45,6 +46,19 @@ final class Validators {
             throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE, "At least one filter must exist for user!");
         } else if (req.getFilters().stream().anyMatch(f -> Objects.isNull(f.getType()))) {
             throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE, "Unknown filter type received!");
+        }
+    }
+
+    static void checkBulkPointRequest(UserPointsBulkRequest req) throws ApiValidationException {
+        if (isInvalid(req.getGameId())) {
+            throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE, "Game Id is null or invalid!");
+        } else if (Utils.isEmpty(req.getUserIds())) {
+            throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE, "At least one user id must be given!");
+        } else if (req.getUserIds().size() > UserPointsBulkRequest.MAX_USERS) {
+            throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE,
+                    "Too many user ids! Maximum is " + UserPointsBulkRequest.MAX_USERS + ".");
+        } else if (req.getUserIds().stream().anyMatch(Validators::isInvalid)) {
+            throw new ApiValidationException(GENERIC_ELEMENT_QUERY_FAILURE, "One or more user ids are null or invalid!");
         }
     }
 
