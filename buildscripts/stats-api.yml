@@ -14,8 +14,8 @@ oasis:
   cache:
     url: "redis://localhost:6381"
 
-    connectionRetries: 5
-    connectionRetryDelay: 5000
+    retryCount: 5
+    retryInterval: 5000
 
     pool:
       max: 16
@@ -25,8 +25,8 @@ oasis:
   enginedb:
     url: "redis://localhost:6379"
 
-    connectionRetries: 5
-    connectionRetryDelay: 5000
+    retryCount: 5
+    retryInterval: 5000
 
     pool:
       max: 16

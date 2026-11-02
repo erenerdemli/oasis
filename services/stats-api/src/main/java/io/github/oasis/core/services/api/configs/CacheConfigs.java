@@ -24,6 +24,7 @@ package io.github.oasis.core.services.api.configs;
 
 import io.github.oasis.core.ID;
 import io.github.oasis.core.configs.OasisConfigs;
+import io.github.oasis.db.redis.RedisFactory;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
@@ -36,7 +37,6 @@ import org.springframework.context.annotation.Profile;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * @author Isuru Weerarathna
@@ -52,13 +52,7 @@ public class CacheConfigs {
     @Bean(destroyMethod = "shutdown")
     @Profile("!test")
     public RedissonClient createRedisson(OasisConfigs oasisConfigs) {
-        String url = oasisConfigs.get("oasis.cache.url", null);
-        String host = oasisConfigs.get("oasis.cache.host", "localhost");
-        int port = oasisConfigs.getInt("oasis.cache.port", 6379);
-
-        Config config = new Config();
-        config.useSingleServer()
-                .setAddress(Objects.toString(url, "redis://" + host + ":" + port));
+        Config config = RedisFactory.createRedissonConfigs(oasisConfigs, "oasis.cache");
         return Redisson.create(config);
     }
 

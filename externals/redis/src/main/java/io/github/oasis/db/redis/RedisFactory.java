@@ -32,7 +32,7 @@ import java.util.Objects;
 /**
  * @author Isuru Weerarathna
  */
-class RedisFactory {
+public class RedisFactory {
 
     private static final Logger LOG = LoggerFactory.getLogger(RedisFactory.class);
 
@@ -88,7 +88,7 @@ class RedisFactory {
         return config;
     }
 
-    static Config createRedissonConfigs(OasisConfigs configs, String configKeyPrefix) {
+    public static Config createRedissonConfigs(OasisConfigs configs, String configKeyPrefix) {
         return createRedissonConfigs(convertToRedisConfigs(configs, configKeyPrefix));
     }
 
