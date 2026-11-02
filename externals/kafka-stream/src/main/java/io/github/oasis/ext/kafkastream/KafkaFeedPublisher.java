@@ -26,7 +26,6 @@ import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.elements.FeedEntry;
 import io.github.oasis.core.exception.OasisRuntimeException;
 import io.github.oasis.core.external.FeedPublisher;
-import io.github.oasis.core.utils.Utils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.slf4j.Logger;
@@ -65,7 +64,9 @@ public class KafkaFeedPublisher extends KafkaPublisher implements FeedPublisher 
 
     /**
      * Kafka will publish this given feed to topic as mentioned in {@link KafkaConstants#TOPIC_FEEDS}
-     * and it will be partitioned by game id wise.
+     * and it will be partitioned by user id, so a single game's feeds spread across all partitions
+     * while a given user's feeds stay ordered on one partition. Falls back to game id when the feed
+     * is not user-scoped.
      *
      * @param feedEntry feed entry instance.
      */
@@ -73,7 +74,8 @@ public class KafkaFeedPublisher extends KafkaPublisher implements FeedPublisher 
     public void publish(FeedEntry feedEntry) {
         var scope = feedEntry.getScope();
         if (scope != null) {
-            String key = String.valueOf(Utils.firstNonNull(scope.getGameId(), -1));
+            long userId = scope.getUserId();
+            String key = userId > 0 ? String.valueOf(userId) : String.valueOf(scope.getGameId());
             try {
                 publishRecord(KafkaConstants.TOPIC_FEEDS, key, feedEntry);
             } catch (IOException e) {
