@@ -19,7 +19,9 @@
 
 package io.github.oasis.services.events;
 
+import io.github.oasis.core.Event;
 import io.github.oasis.core.collect.Pair;
+import io.github.oasis.services.events.model.EventProxy;
 import io.github.oasis.services.events.utils.TestUtils;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
@@ -28,14 +30,20 @@ import io.vertx.junit5.VertxTestContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Isuru Weerarathna
@@ -79,6 +87,34 @@ public class PublishTest extends AbstractEventPushTest {
                             assertSuccessWithInvocations(res, testContext, 2);
                         })
                 );
+    }
+
+    @Test
+    @DisplayName("Server: An event keeps its own team for its own game")
+    void successPublishKeepsEventTeamForItsGame(Vertx vertx, VertxTestContext testContext) throws NoSuchAlgorithmException {
+        KeyPair keyPair = TestUtils.createKeys();
+        String token = UUID.randomUUID().toString();
+        String userEmail = "branch.team@oasis.io";
+        setSourceExists(token, createEventSource(token, 1, Set.of(1,2), keyPair.getPublic()));
+        setPlayerExists(userEmail, createPlayerWith2Teams(userEmail, 500, Pair.of(200,1), Pair.of(201, 2)));
+
+        JsonObject event = TestUtils.aEvent(userEmail, System.currentTimeMillis(), "test.a", 100)
+                .put(Event.GAME_ID, 1)
+                .put(Event.TEAM_ID, 777);
+        JsonObject payload = new JsonObject().put("data", event);
+        String hash = TestUtils.signPayload(payload, keyPair.getPrivate());
+
+        callForEvent(vertx, token + ":" + hash)
+                .sendJson(payload, testContext.succeeding(res -> testContext.verify(() -> {
+                    assertThat(res.statusCode()).isEqualTo(202);
+                    sleepWell();
+                    ArgumentCaptor<EventProxy> events = ArgumentCaptor.forClass(EventProxy.class);
+                    Mockito.verify(dispatcherService, Mockito.times(2)).pushEvent(events.capture(), Mockito.any());
+                    Map<Integer, Long> teamsByGame = events.getAllValues().stream()
+                            .collect(Collectors.toMap(EventProxy::getGameId, EventProxy::getTeam));
+                    assertThat(teamsByGame).isEqualTo(Map.of(1, 777L, 2, 201L));
+                    testContext.completeNow();
+                })));
     }
 
     @Test

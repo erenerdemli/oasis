@@ -26,6 +26,7 @@ import io.github.oasis.core.UserMetadata;
 import io.github.oasis.core.collect.Pair;
 import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.exception.OasisDbException;
 import io.github.oasis.core.exception.OasisException;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -713,6 +715,33 @@ public class RedisRepository implements OasisRepository {
             db.setValueInMap(baseKey, id, serializationSupport.serialize(dbElement));
             updateElementMetadata(elementDef, gameId, db);
             setToElementByType(dbElement, db);
+            return dbElement;
+        });
+    }
+
+    @Override
+    public ElementDef updateElementRule(int gameId, String id, Map<String, Object> data, Map<String, Object> designer) {
+        return updateStoredElement(gameId, id, def -> {
+            def.setData(data);
+            def.setDesigner(designer);
+        });
+    }
+
+    @Override
+    public ElementDef updateElementStatus(int gameId, String id, ElementStatus status) {
+        return updateStoredElement(gameId, id, def -> def.setStatus(status));
+    }
+
+    private ElementDef updateStoredElement(int gameId, String id, Consumer<ElementDef> change) {
+        return withDbContext(db -> {
+            String baseKey = ID.getDetailedElementDefKeyForGame(gameId);
+            String valueFromMap = db.getValueFromMap(baseKey, id);
+            if (Texts.isEmpty(valueFromMap)) {
+                throw new OasisRuntimeException("Element by given id does not exist!");
+            }
+            ElementDef dbElement = serializationSupport.deserialize(valueFromMap, ElementDef.class);
+            change.accept(dbElement);
+            db.setValueInMap(baseKey, id, serializationSupport.serialize(dbElement));
             return dbElement;
         });
     }

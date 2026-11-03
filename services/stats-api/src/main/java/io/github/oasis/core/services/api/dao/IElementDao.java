@@ -70,6 +70,21 @@ public interface IElementDao {
     void updateElement(@Bind("defId") String elementId, @BindBean ElementUpdateDto update, @Bind("ts") long updatedAt);
 
     @SqlUpdate
+    void updateElementData(@Bind("id") int id, @Bind("data") byte[] data);
+
+    @SqlUpdate
+    void updateElementDesigner(@Bind("id") int id, @Bind("designer") byte[] designer, @Bind("ts") long updatedAt);
+
+    @Transaction
+    default void updateElementRule(int id, byte[] data, byte[] designer, long updatedAt) {
+        updateElementData(id, data);
+        updateElementDesigner(id, designer, updatedAt);
+    }
+
+    @SqlUpdate
+    void updateElementStatus(@Bind("id") int id, @Bind("status") String status, @Bind("ts") long updatedAt);
+
+    @SqlUpdate
     void deleteElementById(@Bind("id") int id);
     @SqlUpdate
     void deleteElementDataById(@Bind("id") int id);

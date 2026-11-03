@@ -71,7 +71,7 @@ public class PeriodicBadgeProcessor extends AbstractBadgeProcessor<PeriodicBadge
         String badgeKey = BadgeIDs.getUserTemporalBadgeKey(event.getGameId(), event.getUser(), rule.getId());
         Mapped map = db.MAP(badgeKey);
         long ts = event.getTimestamp() + context.getUserTimeOffset();
-        long tsUnit = ts - (ts % rule.getTimeUnit());
+        long tsUnit = rule.periodStartOf(ts);
         String subKey = String.valueOf(tsUnit);
         BigDecimal updatedVal = map.incrementByDecimal(subKey, value);
         BigDecimal prevValue = updatedVal.subtract(value).setScale(SCALE, RoundingMode.HALF_UP);
@@ -91,7 +91,7 @@ public class PeriodicBadgeProcessor extends AbstractBadgeProcessor<PeriodicBadge
                 event,
                 threshold.getRank(),
                 tsUnit,
-                tsUnit + rule.getTimeUnit(),
+                rule.periodEndOf(tsUnit),
                 event.getTimestamp(),
                 event.getExternalId());
     }
@@ -101,7 +101,7 @@ public class PeriodicBadgeProcessor extends AbstractBadgeProcessor<PeriodicBadge
                 event.asEventScope(),
                 threshold.getRank(),
                 tsUnit,
-                tsUnit + rule.getTimeUnit(),
+                rule.periodEndOf(tsUnit),
                 event.getExternalId(),
                 event.getExternalId());
     }

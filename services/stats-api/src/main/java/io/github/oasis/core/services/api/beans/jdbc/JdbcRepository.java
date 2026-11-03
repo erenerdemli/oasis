@@ -24,6 +24,7 @@ import io.github.oasis.core.ID;
 import io.github.oasis.core.TeamMetadata;
 import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.external.OasisRepository;
 import io.github.oasis.core.external.PaginatedResult;
@@ -44,6 +45,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -444,6 +446,36 @@ public class JdbcRepository implements OasisRepository {
             @CacheEvict(value = ID.CACHE_ELEMENTS_META, key = "{#gameId, #id}")
     })
     @Override
+    public ElementDef updateElementRule(int gameId, String id, Map<String, Object> data, Map<String, Object> designer) {
+        ElementDef dbDef = readExistingElement(gameId, id);
+        elementDao.updateElementRule(dbDef.getId(), toBytes(data), toBytes(designer), System.currentTimeMillis());
+        return toElementDef(elementDao.readElementWithData(id));
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = ID.CACHE_ELEMENTS, key = "{#gameId, #id}"),
+            @CacheEvict(value = ID.CACHE_ELEMENTS_META, key = "{#gameId, #id}")
+    })
+    @Override
+    public ElementDef updateElementStatus(int gameId, String id, ElementStatus status) {
+        ElementDef dbDef = readExistingElement(gameId, id);
+        elementDao.updateElementStatus(dbDef.getId(), status.name(), System.currentTimeMillis());
+        return toElementDef(elementDao.readElementWithData(id));
+    }
+
+    private ElementDef readExistingElement(int gameId, String id) {
+        ElementDef dbDef = readElementWithoutData(gameId, id);
+        if (dbDef == null) {
+            throw new OasisApiRuntimeException(ErrorCodes.ELEMENT_NOT_EXISTS, HttpStatus.NOT_FOUND);
+        }
+        return dbDef;
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = ID.CACHE_ELEMENTS, key = "{#gameId, #id}"),
+            @CacheEvict(value = ID.CACHE_ELEMENTS_META, key = "{#gameId, #id}")
+    })
+    @Override
     public ElementDef deleteElement(int gameId, String id) {
         ElementDef elementDef = toElementDef(elementDao.readElementWithData(id));
         elementDao.deleteElement(elementDef.getId());
@@ -504,14 +536,22 @@ public class JdbcRepository implements OasisRepository {
     private ElementDto toElementDto(int gameId, ElementDef def) {
         ElementDto dto = ElementDto.fromWithoutData(def);
         dto.setGameId(gameId);
-        dto.setData(serializationSupport.serialize(def.getData()).getBytes(StandardCharsets.UTF_8));
+        dto.setData(toBytes(def.getData()));
+        dto.setDesigner(toBytes(def.getDesigner()));
         return dto;
+    }
+
+    private byte[] toBytes(Map<String, Object> value) {
+        return value == null ? null : serializationSupport.serialize(value).getBytes(StandardCharsets.UTF_8);
     }
 
     private ElementDef toElementDef(ElementDto dto) {
         ElementDef resultDef = dto.toDefWithoutData();
         if (Objects.nonNull(dto.getData())) {
             resultDef.setData(serializationSupport.deserializeToMap(dto.getData()));
+        }
+        if (Objects.nonNull(dto.getDesigner())) {
+            resultDef.setDesigner(serializationSupport.deserializeToMap(dto.getDesigner()));
         }
         return resultDef;
     }

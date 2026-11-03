@@ -20,6 +20,7 @@
 package io.github.oasis.core.services.api.dao.dto;
 
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import lombok.*;
 
@@ -50,6 +51,10 @@ public class ElementDto implements Serializable {
 
     private byte[] data;
 
+    private String status;
+
+    private byte[] designer;
+
     public static ElementDto fromWithoutData(ElementDef def) {
         return ElementDto.builder()
                 .gameId(def.getGameId())
@@ -60,6 +65,7 @@ public class ElementDto implements Serializable {
                 .elementIconUrl(def.getMetadata().getIconUrl())
                 .elementWeight(def.getMetadata().getWeight())
                 .type(def.getType())
+                .status(def.getStatus() == null ? ElementStatus.ACTIVE.name() : def.getStatus().name())
                 .build();
     }
 
@@ -72,6 +78,7 @@ public class ElementDto implements Serializable {
                 .gameId(gameId)
                 .version(version)
                 .metadata(meta)
+                .status(status == null ? ElementStatus.ACTIVE : ElementStatus.valueOf(status))
                 .build();
     }
 

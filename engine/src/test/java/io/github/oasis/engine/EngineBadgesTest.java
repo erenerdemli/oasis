@@ -42,6 +42,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 /**
  * @author Isuru Weerarathna
  */
@@ -131,6 +133,26 @@ public class EngineBadgesTest extends OasisEngineTest {
         compareStatReqRes("stats/badges/progress-ps-req.json", UserBadgesProgressRequest.class,
                 "stats/badges/progress-ps-res.json", UserBadgesProgressResponse.class,
                 stats::getUserProgress);
+    }
+
+    @Test
+    public void testEngineBadgeAwardedAtMostMaxAwardTimes() throws IOException {
+        GameDef gameDef = loadRulesFromResource("rules/badges-max-award-times.yml");
+
+        List<AbstractRule> rules = engine.createGame(TEvent.GAME_ID).startGame(TEvent.GAME_ID, gameDef);
+        addRulesToMetadata(TEvent.GAME_ID, rules, gameDef);
+
+        for (int day = 1; day <= 12; day++) {
+            engine.submit(TEvent.createKeyValue(U1, TSZ(String.format("2020-03-%02d 11:15", day), UTC), EVT_A, 75));
+        }
+        awaitTerminated();
+
+        try (DbContext db = dbPool.createContext()) {
+            var summary = db.MAP(BadgeIDs.getGameUserBadgesSummary(TEvent.GAME_ID, U1));
+            assertEquals("1", summary.getValue("rule:BDG_ONCE:10"));
+            assertEquals("1", summary.getValue("rule:BDG_ONCE:20"));
+            assertEquals("2", summary.getValue("all"));
+        }
     }
 
     @Test

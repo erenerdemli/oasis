@@ -43,5 +43,10 @@ public class ElementDef implements Serializable {
     private int version;
     private SimpleElementDefinition metadata;
     private Map<String, Object> data;
+    private ElementStatus status;
+    /**
+     * What an admin entered in a form to build this rule; stored with it, never sent to the engines.
+     */
+    private Map<String, Object> designer;
 
 }

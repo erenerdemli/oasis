@@ -1,0 +1,26 @@
+version: 1
+
+elements:
+  - id: BDG_ONCE
+    name: test.badge.once
+    description: Awards each level once, however many more events follow
+    type: core:badge
+    spec:
+      kind: streak
+      selector:
+        matchEvent: event.a
+      retainTime:
+        duration: 3650
+        unit: days
+      rewards:
+        badge:
+          maxAwardTimes: 1
+      streaks:
+        - streak: 3
+          rewards:
+            badge:
+              rank: 10
+        - streak: 5
+          rewards:
+            badge:
+              rank: 20

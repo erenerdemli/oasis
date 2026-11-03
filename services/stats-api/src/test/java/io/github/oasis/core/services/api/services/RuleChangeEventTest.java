@@ -21,7 +21,9 @@ package io.github.oasis.core.services.api.services;
 
 import io.github.oasis.core.Game;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.services.api.TestUtils;
+import io.github.oasis.core.services.api.exceptions.ErrorCodes;
 import io.github.oasis.core.services.api.to.ElementCreateRequest;
 import io.github.oasis.core.services.api.to.ElementUpdateRequest;
 import io.github.oasis.core.services.api.to.GameCreateRequest;
@@ -31,11 +33,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -168,6 +173,133 @@ public class RuleChangeEventTest extends AbstractServiceTest {
                 .filter(e -> e instanceof RuleChangeEvent)
                 .count();
         assertTrue(ruleChangeEventCount >= 2, "At least 2 RuleChangeEvents should be published");
+    }
+
+    @Test
+    void addPassiveElement_ShouldSaveItWithoutPublishing() {
+        Mockito.reset(spyPublisher);
+
+        Map<String, Object> designer = Map.of("form", "points", "amount", 15);
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements",
+                samplePoint.toBuilder().status(ElementStatus.PASSIVE).designer(designer).build(),
+                ElementDef.class);
+
+        assertEquals(ElementStatus.PASSIVE, added.getStatus());
+        assertTrue(ruleChangeEvents().isEmpty(), "A passive rule must not reach the engines");
+
+        ElementDef read = doGetSuccess("/games/" + gameId + "/elements/" + added.getElementId() + "?withData=true", ElementDef.class);
+        assertEquals(ElementStatus.PASSIVE, read.getStatus());
+        assertEquals(designer, read.getDesigner());
+    }
+
+    @Test
+    void addElementWithoutStatus_ShouldBeActive() {
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements", samplePoint, ElementDef.class);
+
+        assertEquals(ElementStatus.ACTIVE, added.getStatus());
+    }
+
+    @Test
+    void changeStatus_ShouldPublishRemoveThenAdd() {
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements", samplePoint, ElementDef.class);
+        String statusPath = "/games/" + gameId + "/elements/" + added.getElementId() + "/status/";
+
+        Mockito.reset(spyPublisher);
+        ElementDef passive = doPutSuccess(statusPath + "PASSIVE", null, ElementDef.class);
+        assertEquals(ElementStatus.PASSIVE, passive.getStatus());
+        assertChangeTypes(RuleChangeEvent.ChangeType.REMOVE);
+        assertEquals(added.getData(), lastRuleChangeEvent().getElementDef().getData());
+
+        Mockito.reset(spyPublisher);
+        doPutSuccess(statusPath + "PASSIVE", null, ElementDef.class);
+        assertChangeTypes();
+
+        Mockito.reset(spyPublisher);
+        ElementDef active = doPutSuccess(statusPath + "ACTIVE", null, ElementDef.class);
+        assertEquals(ElementStatus.ACTIVE, active.getStatus());
+        assertChangeTypes(RuleChangeEvent.ChangeType.ADD);
+    }
+
+    @Test
+    void updateElementWithData_ShouldReplaceRuleAndPublishIt() {
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements", samplePoint, ElementDef.class);
+        Map<String, Object> newData = withAmount(samplePoint.getData(), 25);
+        Map<String, Object> designer = Map.of("form", "points", "amount", 25);
+
+        Mockito.reset(spyPublisher);
+        doPatchSuccess("/games/" + gameId + "/elements/" + added.getElementId(), ElementUpdateRequest.builder()
+                .name("Answer-Accepted")
+                .version(added.getVersion())
+                .data(newData)
+                .designer(designer)
+                .build(), ElementDef.class);
+
+        assertChangeTypes(RuleChangeEvent.ChangeType.UPDATE);
+        assertEquals(newData, lastRuleChangeEvent().getElementDef().getData());
+
+        ElementDef read = doGetSuccess("/games/" + gameId + "/elements/" + added.getElementId() + "?withData=true", ElementDef.class);
+        assertEquals(newData, read.getData());
+        assertEquals(designer, read.getDesigner());
+    }
+
+    @Test
+    void updateElementWithInvalidData_ShouldKeepTheRule() {
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements", samplePoint, ElementDef.class);
+
+        doPatchError("/games/" + gameId + "/elements/" + added.getElementId(), ElementUpdateRequest.builder()
+                .name("Answer-Accepted")
+                .version(added.getVersion())
+                .data(Map.of("id", "testpoint", "name", "Answer-Accepted", "spec", Map.of("reward", Map.of("amount", 25))))
+                .build(), HttpStatus.BAD_REQUEST, ErrorCodes.ELEMENT_SPEC_INVALID);
+
+        ElementDef read = doGetSuccess("/games/" + gameId + "/elements/" + added.getElementId() + "?withData=true", ElementDef.class);
+        assertEquals(added.getData(), read.getData());
+        assertEquals(added.getVersion(), read.getVersion());
+    }
+
+    @Test
+    void updateAndDeletePassiveElement_ShouldNotPublish() {
+        ElementDef added = doPostSuccess("/games/" + gameId + "/elements",
+                samplePoint.toBuilder().status(ElementStatus.PASSIVE).build(), ElementDef.class);
+
+        Mockito.reset(spyPublisher);
+        doPatchSuccess("/games/" + gameId + "/elements/" + added.getElementId(), ElementUpdateRequest.builder()
+                .name("Answer-Accepted")
+                .version(added.getVersion())
+                .data(withAmount(samplePoint.getData(), 30))
+                .build(), ElementDef.class);
+        doDeleteSuccess("/games/" + gameId + "/elements/" + added.getElementId(), ElementDef.class);
+
+        assertChangeTypes();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> withAmount(Map<String, Object> data, int amount) {
+        Map<String, Object> spec = new HashMap<>((Map<String, Object>) data.get("spec"));
+        Map<String, Object> reward = new HashMap<>((Map<String, Object>) spec.get("reward"));
+        reward.put("amount", amount);
+        spec.put("reward", reward);
+        Map<String, Object> copy = new HashMap<>(data);
+        copy.put("spec", spec);
+        return copy;
+    }
+
+    private List<RuleChangeEvent> ruleChangeEvents() {
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        Mockito.verify(spyPublisher, Mockito.atLeast(0)).publishEvent(eventCaptor.capture());
+        return eventCaptor.getAllValues().stream()
+                .filter(e -> e instanceof RuleChangeEvent)
+                .map(e -> (RuleChangeEvent) e)
+                .toList();
+    }
+
+    private RuleChangeEvent lastRuleChangeEvent() {
+        List<RuleChangeEvent> events = ruleChangeEvents();
+        return events.get(events.size() - 1);
+    }
+
+    private void assertChangeTypes(RuleChangeEvent.ChangeType... expected) {
+        assertEquals(List.of(expected), ruleChangeEvents().stream().map(RuleChangeEvent::getChangeType).toList());
     }
 
     /**

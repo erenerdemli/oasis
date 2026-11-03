@@ -38,6 +38,12 @@ import static io.github.oasis.core.utils.Constants.COLON;
  * @author Isuru Weerarathna
  */
 public class PointsProcessor extends AbstractProcessor<PointRule, PointSignal> {
+
+    /**
+     * A capped rule's own counter in the user's points summary: {@code cap:<ruleId>:<period>}
+     */
+    static final String CAP_PFX = "cap:";
+
     public PointsProcessor(Db dbPool, RuleContext<PointRule> ruleContext) {
         super(dbPool, ruleContext);
     }
@@ -64,13 +70,15 @@ public class PointsProcessor extends AbstractProcessor<PointRule, PointSignal> {
         if (rule.isCapped()) {
             String baseKey = PointIDs.getGameUserPointsSummary(event.getGameId(), event.getUser());
             TimeOffset tcx = new TimeOffset(event.getTimestamp(), context.getUserTimeZone());
-            String childKey = PointsSink.RULE_PFX + rule.getPointId() + COLON + "X" + tcx.getByType(rule.getCapDuration());
-            BigDecimal residue = db.incrementCapped(score, baseKey, childKey, rule.getCapLimit());
+            String childKey = CAP_PFX + rule.getId() + COLON + tcx.getByType(rule.getCapDuration());
+            // a deduction's cap limits the points taken away, so the counter adds up its size
+            boolean deduction = Numbers.isNegative(score);
+            BigDecimal residue = db.incrementCapped(score.abs(), baseKey, childKey, rule.getCapLimit());
             if (Numbers.isNegative(residue)) {
                 // cannot increment due to limit already exceeded. Hence skipping.
                 return null;
             } else {
-                score = residue;
+                score = deduction ? residue.negate() : residue;
             }
         }
         return Collections.singletonList(new PointSignal(rule.getId(), rule.getPointId(), score, event));

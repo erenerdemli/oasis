@@ -26,6 +26,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * @author Isuru Weerarathna
@@ -36,9 +37,17 @@ public abstract class BadgeRule extends AbstractRule {
 
     private String pointId;
     private BigDecimal pointAwards;
+    /**
+     * How many times a player may hold each badge rank, by rank. Ranks not listed have no limit.
+     */
+    private Map<Integer, Integer> maxAwardTimes = Map.of();
 
     public BadgeRule(String id) {
         super(id);
+    }
+
+    public Integer getMaxAwardTimes(int rank) {
+        return maxAwardTimes.get(rank);
     }
 
     public void derivePointsInTo(BadgeSignal signal) {

@@ -28,6 +28,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.io.Serializable;
+import java.util.Map;
 
 /**
  * @author Isuru Weerarathna
@@ -43,6 +44,12 @@ public class ElementUpdateRequest implements Serializable {
     private String description;
     private String iconUrl;
     private Integer weight;
+
+    /**
+     * A new rule, which replaces the current one when given.
+     */
+    private Map<String, Object> data;
+    private Map<String, Object> designer;
 
     @Positive(message = "The 'version' field must be specified to represent updating entity!")
     private int version;

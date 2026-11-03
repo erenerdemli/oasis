@@ -24,6 +24,7 @@ package io.github.oasis.core.services.api.services.impl;
 import io.github.oasis.core.Game;
 import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.PaginatedResult;
@@ -112,6 +113,33 @@ public class EngineManagerImplTest {
         Mockito.verify(eventDispatcher, Mockito.atLeastOnce()).broadcast(messages.capture());
         assertTrue(messages.getAllValues().stream().allMatch(m -> m.getScope().getGameId() == GAME_ID));
         assertEquals(EngineMessage.GAME_STARTED, messages.getValue().getType());
+    }
+
+    @Test
+    void testGameStartSendsOnlyActiveRules() throws Exception {
+        Mockito.when(elementService.listElementsFromGameId(GAME_ID)).thenReturn(List.of(
+                rule("active-rule", ElementStatus.ACTIVE),
+                rule("passive-rule", ElementStatus.PASSIVE),
+                rule("old-rule", null)));
+
+        engineManager.notifyGameStatusChange(GameState.STARTED, TEST_GAME);
+
+        ArgumentCaptor<EngineMessage> messages = ArgumentCaptor.forClass(EngineMessage.class);
+        Mockito.verify(eventDispatcher, Mockito.atLeastOnce()).broadcast(messages.capture());
+        List<Object> sentRuleIds = messages.getAllValues().stream()
+                .filter(m -> EngineMessage.GAME_RULE_ADDED.equals(m.getType()))
+                .map(m -> m.getData().get("id"))
+                .toList();
+        assertEquals(List.of("active-rule", "old-rule"), sentRuleIds);
+    }
+
+    private static ElementDef rule(String id, ElementStatus status) {
+        return ElementDef.builder()
+                .elementId(id)
+                .type("core:point")
+                .status(status)
+                .data(Map.of("id", id))
+                .build();
     }
 
     private static GameStatus gameStatus(int gameId, String status) {

@@ -23,10 +23,12 @@ import io.github.oasis.core.Game;
 import io.github.oasis.core.TeamMetadata;
 import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.model.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Isuru Weerarathna
@@ -78,6 +80,8 @@ public interface OasisRepository {
 
     ElementDef addNewElement(int gameId, ElementDef elementDef);
     ElementDef updateElement(int gameId, String id, SimpleElementDefinition elementDef);
+    ElementDef updateElementRule(int gameId, String id, Map<String, Object> data, Map<String, Object> designer);
+    ElementDef updateElementStatus(int gameId, String id, ElementStatus status);
     ElementDef deleteElement(int gameId, String id);
     ElementDef readElement(int gameId, String id);
     ElementDef readElementWithoutData(int gameId, String id);

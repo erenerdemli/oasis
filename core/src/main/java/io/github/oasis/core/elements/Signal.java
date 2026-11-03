@@ -34,6 +34,7 @@ public abstract class Signal implements Comparable<Signal>  {
     private final String ruleId;
     private final EventScope eventScope;
     private long occurredTimestamp;
+    private boolean discarded;
 
     protected Signal(String ruleId, Event event, long occurredTimestamp) {
         this(ruleId, event.asEventScope(), occurredTimestamp);
@@ -55,6 +56,17 @@ public abstract class Signal implements Comparable<Signal>  {
      */
     public Optional<FeedEntry> generateFeedEntry() {
         return Optional.empty();
+    }
+
+    /**
+     * Marks that a sink did not record this signal, such as a badge already awarded. No feed is sent for it.
+     */
+    public void discard() {
+        this.discarded = true;
+    }
+
+    public boolean isDiscarded() {
+        return discarded;
     }
 
     public String getRuleId() {

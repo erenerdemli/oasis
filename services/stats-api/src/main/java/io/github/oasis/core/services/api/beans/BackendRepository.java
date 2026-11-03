@@ -24,6 +24,7 @@ import io.github.oasis.core.TeamMetadata;
 import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.external.OasisRepository;
 import io.github.oasis.core.external.PaginatedResult;
@@ -296,6 +297,20 @@ public class BackendRepository implements OasisRepository {
     public ElementDef updateElement(int gameId, String id, SimpleElementDefinition elementDef) {
         ElementDef def = adminRepository.updateElement(gameId, id, elementDef);
         engineRepository.updateElement(gameId, id, elementDef);
+        return def;
+    }
+
+    @Override
+    public ElementDef updateElementRule(int gameId, String id, Map<String, Object> data, Map<String, Object> designer) {
+        ElementDef def = adminRepository.updateElementRule(gameId, id, data, designer);
+        engineRepository.updateElementRule(gameId, id, data, designer);
+        return def;
+    }
+
+    @Override
+    public ElementDef updateElementStatus(int gameId, String id, ElementStatus status) {
+        ElementDef def = adminRepository.updateElementStatus(gameId, id, status);
+        engineRepository.updateElementStatus(gameId, id, status);
         return def;
     }
 

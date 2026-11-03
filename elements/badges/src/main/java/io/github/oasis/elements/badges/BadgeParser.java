@@ -39,6 +39,7 @@ import io.github.oasis.elements.badges.spec.BadgeSpecification;
 import io.github.oasis.elements.badges.spec.RewardDef;
 import io.github.oasis.elements.badges.spec.Streak;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -135,7 +136,8 @@ public class BadgeParser extends AbstractElementParser {
         } else if (PERIODIC_ACCUMULATIONS_KIND.equals(kind)) {
             PeriodicBadgeRule temp = new PeriodicBadgeRule(id);
             AbstractDef.defToRule(def, temp);
-            temp.setTimeUnit(toLongTimeUnit(spec.getPeriod()));
+            temp.setTimeUnit(BadgePeriods.lengthOf(spec.getPeriod()));
+            temp.setCalendarUnit(BadgePeriods.calendarUnitOf(spec.getPeriod()));
             temp.setCriteria(temp.getEventFilter());
             temp.setThresholds(spec.getThresholds().stream()
                     .map(t -> t.toRuleThreshold(def)).collect(Collectors.toList()));
@@ -144,7 +146,8 @@ public class BadgeParser extends AbstractElementParser {
         } else if (PERIODIC_OCCURRENCES_KIND.equals(kind)) {
             PeriodicOccurrencesRule temp = new PeriodicOccurrencesRule(id);
             AbstractDef.defToRule(def, temp);
-            temp.setTimeUnit(toLongTimeUnit(spec.getPeriod()));
+            temp.setTimeUnit(BadgePeriods.lengthOf(spec.getPeriod()));
+            temp.setCalendarUnit(BadgePeriods.calendarUnitOf(spec.getPeriod()));
             temp.setCriteria(temp.getEventFilter());
             temp.setThresholds(spec.getThresholds().stream()
                     .map(t -> t.toRuleThreshold(def)).collect(Collectors.toList()));
@@ -171,8 +174,32 @@ public class BadgeParser extends AbstractElementParser {
         }
 
         setPointDetails(spec, rule);
+        rule.setMaxAwardTimes(toMaxAwardTimes(spec));
 
         return rule;
+    }
+
+    private Map<Integer, Integer> toMaxAwardTimes(BadgeSpecification spec) {
+        RewardDef defaults = spec.getRewards();
+        Map<Integer, Integer> limits = new HashMap<>();
+        putMaxAwardTimes(limits, defaults);
+        if (spec.getStreaks() != null) {
+            spec.getStreaks().forEach(streak -> putMaxAwardTimes(limits, RewardDef.merge(streak.getRewards(), defaults)));
+        }
+        if (spec.getThresholds() != null) {
+            spec.getThresholds().forEach(threshold -> putMaxAwardTimes(limits, RewardDef.merge(threshold.getRewards(), defaults)));
+        }
+        if (spec.getConditions() != null) {
+            spec.getConditions().forEach(condition -> putMaxAwardTimes(limits, RewardDef.merge(condition.getRewards(), defaults)));
+        }
+        return limits;
+    }
+
+    private void putMaxAwardTimes(Map<Integer, Integer> limits, RewardDef rewards) {
+        if (rewards != null && rewards.getBadge() != null
+                && rewards.getBadge().getRank() != null && rewards.getBadge().getMaxAwardTimes() != null) {
+            limits.put(rewards.getBadge().getRank(), rewards.getBadge().getMaxAwardTimes());
+        }
     }
 
     private void setPointDetails(BadgeSpecification spec, BadgeRule rule) {

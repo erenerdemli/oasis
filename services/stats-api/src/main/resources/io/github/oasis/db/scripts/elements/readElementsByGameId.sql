@@ -8,7 +8,9 @@ SELECT
     icon_url AS elementIconUrl,
     weight AS elementWeight,
     version AS version,
-    is_active AS active
+    is_active AS active,
+    status,
+    designer
 FROM
     OA_ELEMENT
 WHERE

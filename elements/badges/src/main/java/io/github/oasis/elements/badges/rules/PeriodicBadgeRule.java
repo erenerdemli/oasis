@@ -22,12 +22,14 @@ package io.github.oasis.elements.badges.rules;
 import io.github.oasis.core.context.ExecutionContext;
 import io.github.oasis.core.elements.EventExecutionFilter;
 import io.github.oasis.core.elements.EventValueResolver;
+import io.github.oasis.elements.badges.BadgePeriods;
 import io.github.oasis.elements.badges.signals.BadgeSignal;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -41,12 +43,24 @@ import java.util.Objects;
 public class PeriodicBadgeRule extends BadgeRule {
 
     private long timeUnit;
+    /**
+     * Set for calendar weeks and months, which have no fixed length; {@link #timeUnit} is then unused.
+     */
+    private ChronoUnit calendarUnit;
     private EventExecutionFilter criteria;
     protected EventValueResolver<ExecutionContext> valueResolver;
     private List<Threshold> thresholds;
 
     public PeriodicBadgeRule(String id) {
         super(id);
+    }
+
+    public long periodStartOf(long ts) {
+        return BadgePeriods.startOf(ts, timeUnit, calendarUnit);
+    }
+
+    public long periodEndOf(long periodStart) {
+        return BadgePeriods.endOf(periodStart, timeUnit, calendarUnit);
     }
 
     @Override

@@ -225,6 +225,58 @@ public class PointsTest extends AbstractRuleTest {
                 new PointSignal(ruleContext.getRule().getId(), pointId, BigDecimal.valueOf(33.0), e2));
     }
 
+    @DisplayName("Daily capped deduction: the cap limits the points taken away")
+    @Test
+    public void testCappedDeduction() {
+        TEvent e1 = TEvent.createKeyValue(1593577800000L, EVT_A, 67);
+        TEvent e2 = TEvent.createKeyValue(1593585000000L, EVT_A, 55);
+        TEvent e3 = TEvent.createKeyValue(1593592200000L, EVT_A, 81);
+
+        List<Signal> signals = new ArrayList<>();
+        EventValueResolver<ExecutionContext> resolver = (event, input) -> BigDecimal.valueOf(-(long)event.getFieldValue("value"));
+        RuleContext<PointRule> ruleContext = createRule(resolver, (event, rule, ctx) -> true, signals);
+        ruleContext.getRule().setCapDuration("daily");
+        ruleContext.getRule().setCapLimit(BigDecimal.valueOf(100));
+        PointsProcessor processor = new PointsProcessor(pool, ruleContext);
+        submitOrder(processor, e1, e2, e3);
+
+        String pointId = ruleContext.getRule().getPointId();
+        assertStrict(signals,
+                new PointSignal(ruleContext.getRule().getId(), pointId, BigDecimal.valueOf(-67.0), e1),
+                new PointSignal(ruleContext.getRule().getId(), pointId, BigDecimal.valueOf(-33), e2));
+    }
+
+    @DisplayName("Daily capped points: each rule of a point type has its own cap")
+    @Test
+    public void testCapsArePerRule() {
+        TEvent e1 = TEvent.createKeyValue(1593577800000L, EVT_A, 67);
+        TEvent e2 = TEvent.createKeyValue(1593585000000L, EVT_A, 55);
+
+        List<Signal> signals = new ArrayList<>();
+        EventValueResolver<ExecutionContext> resolver = (event, input) -> BigDecimal.valueOf((long)event.getFieldValue("value"));
+        RuleContext<PointRule> first = createRule(resolver, (event, rule, ctx) -> true, signals);
+        first.getRule().setCapDuration("daily");
+        first.getRule().setCapLimit(BigDecimal.valueOf(100));
+
+        PointRule other = new PointRule("test.point.rule.other");
+        other.setPointId(first.getRule().getPointId());
+        other.setEventTypeMatcher(new SingleEventTypeMatcher(EVT_A));
+        other.setAmountExpression(resolver);
+        other.setCriteria((event, rule, ctx) -> true);
+        other.setCapDuration("daily");
+        other.setCapLimit(BigDecimal.valueOf(100));
+        RuleContext<PointRule> second = new RuleContext<>(other, fromConsumer(signals::add));
+
+        submitOrder(new PointsProcessor(pool, first), e1, e2);
+        submitOrder(new PointsProcessor(pool, second), e1);
+
+        String pointId = first.getRule().getPointId();
+        assertStrict(signals,
+                new PointSignal(first.getRule().getId(), pointId, BigDecimal.valueOf(67.0), e1),
+                new PointSignal(first.getRule().getId(), pointId, BigDecimal.valueOf(33), e2),
+                new PointSignal(other.getId(), pointId, BigDecimal.valueOf(67.0), e1));
+    }
+
     private BigDecimal awards(Event event, ExecutionContext context) {
         return BigDecimal.valueOf((long)event.getFieldValue("value") / 5);
     }

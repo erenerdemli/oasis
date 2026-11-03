@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: add_col_status_designer_element
+      author: erenerdemli
+      changes:
+        - addColumn:
+            tableName: OA_ELEMENT
+            columns:
+              - column:
+                  name: status
+                  type: varchar(16)
+                  defaultValue: ACTIVE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: designer
+                  type: blob

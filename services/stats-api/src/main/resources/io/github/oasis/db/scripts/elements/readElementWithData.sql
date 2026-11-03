@@ -9,6 +9,8 @@ SELECT
     oa.weight AS elementWeight,
     oa.is_active AS active,
     oa.version AS version,
+    oa.status,
+    oa.designer,
     oad.def_data AS data
 FROM
     OA_ELEMENT oa

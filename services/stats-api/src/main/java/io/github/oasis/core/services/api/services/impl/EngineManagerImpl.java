@@ -24,6 +24,7 @@ package io.github.oasis.core.services.api.services.impl;
 
 import io.github.oasis.core.Game;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.messages.EngineMessage;
@@ -104,9 +105,11 @@ public class EngineManagerImpl implements IEngineManager, Closeable {
         EngineMessage createdMessage = EngineMessage.createGameLifecycleEvent(gameId, GameState.CREATED);
         dispatchSupport.broadcast(createdMessage);
 
-        // then game rules
+        // then game rules, leaving out passive ones
         EngineMessage.Scope eventScope = new EngineMessage.Scope(gameId);
-        List<ElementDef> elementDefs = elementService.listElementsFromGameId(gameId);
+        List<ElementDef> elementDefs = elementService.listElementsFromGameId(gameId).stream()
+                .filter(def -> ElementStatus.runs(def.getStatus()))
+                .toList();
         LOG.info("Number of game rules to be sent = {}", elementDefs.size());
         for (ElementDef def : elementDefs) {
             EngineMessage ruleAdded = new EngineMessage();

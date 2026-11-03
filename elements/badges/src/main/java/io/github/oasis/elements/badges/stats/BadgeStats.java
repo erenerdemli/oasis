@@ -25,6 +25,7 @@ import io.github.oasis.core.elements.RankInfo;
 import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.exception.OasisException;
+import io.github.oasis.core.elements.spec.TimeUnitDef;
 import io.github.oasis.core.exception.OasisRuntimeException;
 import io.github.oasis.core.external.DbContext;
 import io.github.oasis.core.external.Mapped;
@@ -42,6 +43,7 @@ import io.github.oasis.core.utils.Utils;
 import io.github.oasis.elements.badges.BadgeDef;
 import io.github.oasis.elements.badges.BadgeIDs;
 import io.github.oasis.elements.badges.BadgeParser;
+import io.github.oasis.elements.badges.BadgePeriods;
 import io.github.oasis.elements.badges.spec.Streak;
 import io.github.oasis.elements.badges.stats.to.GameRuleWiseBadgeLog;
 import io.github.oasis.elements.badges.stats.to.GameRuleWiseBadgeLog.RuleBadgeLogRecord;
@@ -300,9 +302,9 @@ public class BadgeStats extends AbstractStatsApiService {
         String thresholdKey = BadgeIDs.getUserTemporalBadgeKey(response.getGameId(), response.getUserId(), ruleId);
         Mapped mapped = db.MAP(thresholdKey);
 
-        long timeUnit = BadgeParser.toLongTimeUnit(badgeDef.getSpec().getPeriod());
+        TimeUnitDef period = badgeDef.getSpec().getPeriod();
         long ts = System.currentTimeMillis() + userTimeOffset;
-        long tsUnit = ts - (ts % timeUnit);
+        long tsUnit = BadgePeriods.startOf(ts, BadgePeriods.lengthOf(period), BadgePeriods.calendarUnitOf(period));
         String subKey = String.valueOf(tsUnit);
 
         String currValueStr = mapped.getValue(subKey);

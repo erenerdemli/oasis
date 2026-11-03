@@ -19,6 +19,7 @@
 
 package io.github.oasis.core.services.api.to;
 
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -54,6 +55,13 @@ public class ElementCreateRequest implements Serializable {
     @NotNull(message = "Parameter 'data' is mandatory!")
     @NotEmpty(message = "Parameter 'data' must have at least one field!")
     private Map<String, Object> data;
+
+    /**
+     * A passive rule is saved but not run. Rules sent without a status run.
+     */
+    private ElementStatus status;
+
+    private Map<String, Object> designer;
 
     @Data
     @Builder(toBuilder = true)

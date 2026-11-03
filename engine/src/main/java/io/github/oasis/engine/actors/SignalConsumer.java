@@ -117,7 +117,7 @@ public class SignalConsumer extends OasisBaseActor {
                 });
             }
 
-            if (feedPublisher != null) {
+            if (feedPublisher != null && !signal.isDiscarded()) {
                 signal.generateFeedEntry().ifPresent(feedPublisher::publish);
             }
 

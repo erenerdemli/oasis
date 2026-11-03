@@ -31,6 +31,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -401,6 +403,30 @@ public class PeriodicOccurrenceTest extends AbstractRuleTest {
         assertStrict(signals,
                 new TemporalBadgeSignal(rule.getId(), e7, ATTR_1, 100, 150, e7.getTimestamp(), e7.getExternalId()),
                 new TemporalBadgeSignal(rule.getId(), e6, ATTR_1, 150, 200, e6.getTimestamp(), e6.getExternalId()));
+    }
+
+    @DisplayName("Calendar week: counts Monday to Sunday")
+    @Test
+    public void testCalendarWeek() {
+        TEvent sunday = TEvent.createKeyValue(ms("2026-11-08T20:00:00Z"), EVENT_TYPE, 75);
+        TEvent monday = TEvent.createKeyValue(ms("2026-11-09T09:00:00Z"), EVENT_TYPE, 75);
+        TEvent tuesday = TEvent.createKeyValue(ms("2026-11-10T09:00:00Z"), EVENT_TYPE, 75);
+
+        List<Signal> signals = new ArrayList<>();
+        RuleContext<PeriodicBadgeRule> ruleContext = createRule(0, signals, aT(ATTR_1, 2));
+        PeriodicBadgeRule rule = ruleContext.getRule();
+        rule.setCalendarUnit(ChronoUnit.WEEKS);
+        PeriodicBadgeProcessor processor = new PeriodicBadgeProcessor(pool, ruleContext);
+        submitOrder(processor, sunday, monday, tuesday);
+
+        assertStrict(signals,
+                new TemporalBadgeSignal(rule.getId(), tuesday, ATTR_1,
+                        ms("2026-11-09T00:00:00Z"), ms("2026-11-16T00:00:00Z"),
+                        tuesday.getTimestamp(), tuesday.getExternalId()));
+    }
+
+    private static long ms(String instant) {
+        return Instant.parse(instant).toEpochMilli();
     }
 
     private PeriodicBadgeRule.Threshold aT(int attr, long threshold) {

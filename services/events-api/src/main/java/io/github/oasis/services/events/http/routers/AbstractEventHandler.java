@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -70,8 +71,9 @@ public abstract class AbstractEventHandler {
                         .collect(Collectors.toList());
 
                 for (int gameId : gameIds) {
-                    user.getTeamId(gameId).ifPresent(teamId -> {
-                        EventProxy gameEvent = event.copyForGame(gameId, source.getSourceId(), user.getId(), teamId);
+                    user.getTeamId(gameId).ifPresent(memberTeamId -> {
+                        EventProxy gameEvent = event.copyForGame(gameId, source.getSourceId(), user.getId(),
+                                teamOf(event, gameId, memberTeamId));
                         dispatcherService.pushEvent(gameEvent, dispatcherRes -> {
                             if (dispatcherRes.succeeded()) {
                                 LOG.info("[{}] Event published.", event.getExternalId());
@@ -94,6 +96,15 @@ public abstract class AbstractEventHandler {
                 handler.handle(Future.failedFuture(new IllegalArgumentException("Cannot accept this event at this moment " + userEmail + "!")));
             }
         });
+    }
+
+    /**
+     * An event sent for this game with its own team keeps it, as Kafka-dispatched events do;
+     * otherwise it takes the player's team in the game.
+     */
+    private static long teamOf(EventProxy event, int gameId, long memberTeamId) {
+        Long team = event.getTeam();
+        return team != null && Objects.equals(event.getGameId(), gameId) ? team : memberTeamId;
     }
 
     protected void failWithInvalidPayloadFormat(RoutingContext context) {

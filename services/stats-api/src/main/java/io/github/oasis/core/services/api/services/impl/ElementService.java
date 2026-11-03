@@ -24,6 +24,7 @@ package io.github.oasis.core.services.api.services.impl;
 
 import io.github.oasis.core.Game;
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.elements.SimpleElementDefinition;
 import io.github.oasis.core.exception.OasisParseException;
 import io.github.oasis.core.external.OasisRepository;
@@ -90,6 +91,8 @@ public class ElementService extends AbstractOasisService implements IElementServ
                 .elementId(request.getMetadata().getId())
                 .metadata(request.getMetadata().toElementDefinition())
                 .type(request.getType())
+                .status(request.getStatus() == null ? ElementStatus.ACTIVE : request.getStatus())
+                .designer(request.getDesigner())
                 .build();
 
         try {
@@ -99,7 +102,9 @@ public class ElementService extends AbstractOasisService implements IElementServ
 
             // Publish rule change event to notify running game engines
             // The listener will check if the game is running before forwarding to engine
-            publishRuleChangeEvent(RuleChangeEvent.ChangeType.ADD, gameId, savedElement);
+            if (ElementStatus.runs(savedElement.getStatus())) {
+                publishRuleChangeEvent(RuleChangeEvent.ChangeType.ADD, gameId, savedElement);
+            }
             LOG.info("Element added: gameId={}, elementId={}", gameId, savedElement.getElementId());
 
             return savedElement;
@@ -117,6 +122,15 @@ public class ElementService extends AbstractOasisService implements IElementServ
 
     @Override
     public ElementDef updateElement(int gameId, String elementId, ElementUpdateRequest updateRequest) {
+        if (updateRequest.getData() != null) {
+            ElementDef current = readElement(gameId, elementId, false);
+            statsApiContext.validateElement(ElementDef.builder()
+                    .type(current.getType())
+                    .gameId(gameId)
+                    .data(updateRequest.getData())
+                    .build());
+        }
+
         SimpleElementDefinition metadata = new SimpleElementDefinition(
                 elementId,
                 updateRequest.getName(),
@@ -125,14 +139,39 @@ public class ElementService extends AbstractOasisService implements IElementServ
                 updateRequest.getWeight(),
                 updateRequest.getVersion());
         ElementDef updatedElement = backendRepository.updateElement(gameId, elementId, metadata);
+        if (updateRequest.getData() != null) {
+            updatedElement = backendRepository.updateElementRule(gameId, elementId,
+                    updateRequest.getData(), updateRequest.getDesigner());
+        }
 
         // For updates, we need the full element data to send to the engine
         // Read the element with data to ensure engine gets complete rule definition
         ElementDef elementWithData = backendRepository.readElement(gameId, elementId);
 
         // Publish rule change event to notify running game engines
-        publishRuleChangeEvent(RuleChangeEvent.ChangeType.UPDATE, gameId, elementWithData);
+        if (ElementStatus.runs(elementWithData.getStatus())) {
+            publishRuleChangeEvent(RuleChangeEvent.ChangeType.UPDATE, gameId, elementWithData);
+        }
         LOG.info("Element updated: gameId={}, elementId={}", gameId, elementId);
+
+        return updatedElement;
+    }
+
+    @Override
+    public ElementDef changeStatus(int gameId, String elementId, ElementStatus status) {
+        ElementDef current = readElement(gameId, elementId, false);
+        if (ElementStatus.runs(current.getStatus()) == ElementStatus.runs(status)) {
+            return current;
+        }
+
+        ElementDef updatedElement = backendRepository.updateElementStatus(gameId, elementId, status);
+
+        // An activated rule starts running on the engines; a passivated one stops, keeping what players earned
+        RuleChangeEvent.ChangeType changeType = ElementStatus.runs(status)
+                ? RuleChangeEvent.ChangeType.ADD
+                : RuleChangeEvent.ChangeType.REMOVE;
+        publishRuleChangeEvent(changeType, gameId, updatedElement);
+        LOG.info("Element status changed: gameId={}, elementId={}, status={}", gameId, elementId, status);
 
         return updatedElement;
     }
@@ -147,7 +186,9 @@ public class ElementService extends AbstractOasisService implements IElementServ
         // Publish rule change event to notify running game engines
         // Use the element data we read before deletion
         if (elementToDelete != null) {
-            publishRuleChangeEvent(RuleChangeEvent.ChangeType.REMOVE, gameId, elementToDelete);
+            if (ElementStatus.runs(elementToDelete.getStatus())) {
+                publishRuleChangeEvent(RuleChangeEvent.ChangeType.REMOVE, gameId, elementToDelete);
+            }
             LOG.info("Element deleted: gameId={}, elementId={}", gameId, elementId);
         }
 

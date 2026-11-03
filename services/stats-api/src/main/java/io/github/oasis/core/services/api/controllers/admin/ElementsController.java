@@ -20,6 +20,7 @@
 package io.github.oasis.core.services.api.controllers.admin;
 
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.services.annotations.ForCurator;
 import io.github.oasis.core.services.annotations.ForPlayer;
 import io.github.oasis.core.services.api.controllers.AbstractController;
@@ -95,6 +96,18 @@ public class ElementsController extends AbstractController {
                              @PathVariable("elementId") String elementId,
                              @Valid @RequestBody ElementUpdateRequest updateRequest) {
         return elementService.updateElement(gameId, elementId, updateRequest);
+    }
+
+    @Operation(
+            summary = "Activates or passivates an existing game element",
+            tags = {"admin", "curator"}
+    )
+    @ForCurator
+    @PutMapping(path = "/games/{gameId}/elements/{elementId}/status/{status}")
+    public ElementDef changeStatus(@PathVariable("gameId") Integer gameId,
+                                   @PathVariable("elementId") String elementId,
+                                   @PathVariable("status") ElementStatus status) {
+        return elementService.changeStatus(gameId, elementId, status);
     }
 
     @Operation(

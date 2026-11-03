@@ -28,6 +28,7 @@ import io.github.oasis.core.external.Db;
 import io.github.oasis.core.external.DbContext;
 import io.github.oasis.core.external.Mapped;
 import io.github.oasis.core.external.Sorted;
+import io.github.oasis.core.utils.Numbers;
 import io.github.oasis.core.utils.TimeOffset;
 import io.github.oasis.elements.badges.rules.BadgeRule;
 import io.github.oasis.elements.badges.signals.BadgeRemoveSignal;
@@ -81,21 +82,34 @@ public class BadgeSink extends AbstractSink {
             Sorted badgeLog = db.SORTED(BadgeIDs.getGameUserBadgesLog(gameId, userId));
             Sorted ruleWiseBadgeLog = db.SORTED(BadgeIDs.getGameRuleWiseBadgeLogKey(gameId, ruleId));
 
+            Mapped badgesMap = db.MAP(BadgeIDs.getGameUserBadgesSummary(gameId, userId));
+            String rulePfx = RULE_PFX + ruleId + COLON + signal.getRank();
+
             if (isRemoval) {
-                removeFromBadgeLog(signal, badgeLog, ruleWiseKey, ruleWiseBadgeLog);
+                if (!removeFromBadgeLog(signal, badgeLog, ruleWiseKey, ruleWiseBadgeLog)) {
+                    LOG.info("Removal of a badge never awarded received! Skipping signal {}.", signal);
+                    signal.discard();
+                    return null;
+                }
             } else {
+                Integer maxAwardTimes = rule.getMaxAwardTimes(signal.getRank());
+                if (maxAwardTimes != null && Numbers.asInt(badgesMap.getValue(rulePfx)) >= maxAwardTimes) {
+                    LOG.info("Badge already awarded the most times allowed! Skipping signal {}.", signal);
+                    signal.discard();
+                    return null;
+                }
+
                 String logMember = getBadgeKey(signal);
                 boolean added = badgeLog.add(logMember, signal.getOccurredTimestamp());
 
                 if (!added) {
                     LOG.info("Already added badge received! Skipping signal {}.", signal);
+                    signal.discard();
                     return null;
                 }
 
                 ruleWiseBadgeLog.add(ruleWiseKey, signal.getOccurredTimestamp());
             }
-
-            Mapped badgesMap = db.MAP(BadgeIDs.getGameUserBadgesSummary(gameId, userId));
 
             TimeOffset tcx = new TimeOffset(ts, context.getUserTimeOffset());
 
@@ -107,7 +121,6 @@ public class BadgeSink extends AbstractSink {
             badgesMap.incrementByInt(ALL_PFX + tcx.getQuarter(), addition);
 
             // by type + attr
-            String rulePfx = RULE_PFX + ruleId + COLON + signal.getRank();
             badgesMap.incrementByInt(RULE_PFX + ruleId, addition);
             badgesMap.incrementByInt(rulePfx, addition);
             badgesMap.incrementByInt(rulePfx + COLON + tcx.getYear(), addition);
@@ -139,13 +152,13 @@ public class BadgeSink extends AbstractSink {
         return null;
     }
 
-    private void removeFromBadgeLog(BadgeSignal signal, Sorted badgeLog, String ruleWiseKey, Sorted ruleWiseBadgeLog) {
+    private boolean removeFromBadgeLog(BadgeSignal signal, Sorted badgeLog, String ruleWiseKey, Sorted ruleWiseBadgeLog) {
         String ruleId = signal.getRuleId();
         int rankId = signal.getRank();
-        if (!badgeLog.remove(String.format(STREAK_BADGE_FORMAT, ruleId, rankId, signal.getStartTime()))) {
-            badgeLog.remove(String.format(GENERAL_BADGE_FORMAT, ruleId, rankId, signal.getEndId()));
-        }
+        boolean removed = badgeLog.remove(String.format(STREAK_BADGE_FORMAT, ruleId, rankId, signal.getStartTime()))
+                || badgeLog.remove(String.format(GENERAL_BADGE_FORMAT, ruleId, rankId, signal.getEndId()));
         ruleWiseBadgeLog.remove(ruleWiseKey);
+        return removed;
     }
 
     private String getBadgeKey(BadgeSignal signal) {

@@ -23,6 +23,7 @@
 package io.github.oasis.core.services.api.services;
 
 import io.github.oasis.core.elements.ElementDef;
+import io.github.oasis.core.elements.ElementStatus;
 import io.github.oasis.core.exception.OasisParseException;
 import io.github.oasis.core.services.api.to.ElementCreateRequest;
 import io.github.oasis.core.services.api.to.ElementUpdateRequest;
@@ -45,6 +46,8 @@ public interface IElementService {
     ElementDef addElement(int gameId, ElementCreateRequest request) throws OasisParseException;
 
     ElementDef updateElement(int gameId, String elementId, ElementUpdateRequest updateRequest);
+
+    ElementDef changeStatus(int gameId, String elementId, ElementStatus status);
 
     ElementDef deleteElement(int gameId, String elementId);
 
