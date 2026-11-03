@@ -25,6 +25,7 @@ import akka.actor.ActorSystem;
 import akka.actor.CoordinatedShutdown;
 import akka.actor.Props;
 import akka.pattern.Patterns;
+import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import io.github.oasis.core.Event;
 import io.github.oasis.core.elements.AbstractRule;
@@ -45,15 +46,13 @@ import io.github.oasis.engine.actors.cmds.internal.GameStatusReply;
 import io.github.oasis.engine.ext.ExternalParty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.concurrent.Await;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * @author Isuru Weerarathna
@@ -61,6 +60,13 @@ import java.util.concurrent.TimeoutException;
 public class OasisEngine implements MessageReceiver {
 
     private static final Logger LOG = LoggerFactory.getLogger(OasisEngine.class);
+
+    /**
+     * Closing the event source waits for the events in progress, see KafkaStreamConsumer. Akka
+     * gives a shutdown phase 5 seconds unless told otherwise.
+     */
+    private static final Map<String, Object> SHUTDOWN_DEFAULTS = Map.of(
+            "akka.coordinated-shutdown.phases.before-service-unbind.timeout", "60s");
 
     private ActorSystem oasisEngine;
     private ActorRef supervisor;
@@ -76,9 +82,24 @@ public class OasisEngine implements MessageReceiver {
 
         String engineName = context.getConfigs().get("oasis.name", "oasis-engine");
         var allConfigs =  context.getConfigs().getAll();
-        oasisEngine = ActorSystem.create(engineName, ConfigFactory.parseMap(allConfigs));
+        Config akkaConfigs = ConfigFactory.parseMap(allConfigs).withFallback(ConfigFactory.parseMap(SHUTDOWN_DEFAULTS));
+        oasisEngine = ActorSystem.create(engineName, akkaConfigs);
         supervisor = oasisEngine.actorOf(Props.create(OasisSupervisor.class, context), ActorNames.OASIS_SUPERVISOR);
         LOG.info("Oasis engine initialization invoked...");
+
+        // Akka runs this shutdown on a stop signal (and on terminate), phase by phase. The event
+        // source stops first and waits until the actors finish the events it handed over, so that
+        // it commits them. Only then the actors stop. Events still unfinished are read again by the
+        // engine that takes over their partitions.
+        CoordinatedShutdown.get(oasisEngine)
+                .addTask(
+                        CoordinatedShutdown.PhaseBeforeServiceUnbind(),
+                        "closeEventSource",
+                        () -> CompletableFuture.supplyAsync(() -> {
+                            LOG.info("Shutdown signal received for Oasis engine. Finishing events in progress...");
+                            closeSourceStreamProvider();
+                            return Done.done();
+                        }));
 
         CoordinatedShutdown.get(oasisEngine)
                 .addTask(
@@ -89,24 +110,8 @@ public class OasisEngine implements MessageReceiver {
                             return CompletableFuture.completedFuture(Done.done());
                         });
 
-        CoordinatedShutdown.get(oasisEngine)
-                .addJvmShutdownHook(this::closeSourceStreamProvider);
-        CoordinatedShutdown.get(oasisEngine)
-                .addJvmShutdownHook(this::notifyShutdownToActors);
-
         LOG.info("Bootstrapping event stream...");
         bootstrapEventStream(oasisEngine);
-    }
-
-    private void notifyShutdownToActors() {
-        LOG.info("Shutdown signal received for Oasis engine...");
-        oasisEngine.terminate();
-        try {
-            Await.result(oasisEngine.whenTerminated(), scala.concurrent.duration.Duration.create(30, TimeUnit.SECONDS));
-        } catch (InterruptedException | TimeoutException e) {
-            e.printStackTrace();
-        }
-        LOG.info("Shutdown completed in Oasis engine.");
     }
 
     private void closeSourceStreamProvider() {
@@ -129,6 +134,9 @@ public class OasisEngine implements MessageReceiver {
         Object message = DefinitionReader.derive(dto, context);
         if (message != null) {
             supervisor.tell(message, supervisor);
+        } else {
+            // nothing will process it, so the source must not wait for it
+            ExternalParty.EXTERNAL_PARTY.get(oasisEngine).ackMessage(dto.getMessageId());
         }
     }
 

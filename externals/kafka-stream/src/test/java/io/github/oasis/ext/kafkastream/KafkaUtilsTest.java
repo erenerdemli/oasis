@@ -23,6 +23,7 @@ package io.github.oasis.ext.kafkastream;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.commons.io.IOUtils;
+import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -151,7 +152,7 @@ class KafkaUtilsTest {
     @Test
     void getBroadcastConsumerProps_withGroupId() {
         var configs = readConfigs("broadcastConsumer-withGroupId");
-        var props = KafkaUtils.getBroadcastConsumerProps(configs);
+        var props = KafkaUtils.getBroadcastConsumerProps(configs, "engine-1");
 
         assertProps(props,
                 Map.of(BOOTSTRAP_SERVERS_CONFIG, "localhost:9091,localhost:9092",
@@ -166,11 +167,10 @@ class KafkaUtilsTest {
     @Test
     void getBroadcastConsumerProps_withoutGroupIdAndProps() {
         var configs = readConfigs("broadcastConsumer-withoutGroupIdAndProps");
-        var props = KafkaUtils.getBroadcastConsumerProps(configs);
+        var props = KafkaUtils.getBroadcastConsumerProps(configs, "engine-1");
 
         Assertions.assertEquals(7, props.size());
-        Assertions.assertNotNull(props.getProperty(GROUP_ID_CONFIG));
-        Assertions.assertEquals(props.getProperty(GROUP_ID_CONFIG).length(), UUID.randomUUID().toString().length());
+        Assertions.assertEquals("oasis-broadcast-engine-1", props.getProperty(GROUP_ID_CONFIG));
         Map.of(BOOTSTRAP_SERVERS_CONFIG, "localhost:9091,localhost:9092",
                         KEY_DESERIALIZER_CLASS_CONFIG, DEF_STR_DESERIALIZER,
                         VALUE_DESERIALIZER_CLASS_CONFIG, DEF_STR_DESERIALIZER,
@@ -192,7 +192,9 @@ class KafkaUtilsTest {
                         VALUE_DESERIALIZER_CLASS_CONFIG, DEF_STR_DESERIALIZER,
                         GROUP_ID_CONFIG, "oasis-game-event-consumer-1",
                         GROUP_INSTANCE_ID_CONFIG, "engine-id",
-                        AUTO_OFFSET_RESET_CONFIG, KafkaConstants.EARLIEST));
+                        AUTO_OFFSET_RESET_CONFIG, KafkaConstants.EARLIEST,
+                        ENABLE_AUTO_COMMIT_CONFIG, "false",
+                        PARTITION_ASSIGNMENT_STRATEGY_CONFIG, CooperativeStickyAssignor.class.getName()));
     }
 
     @Test
@@ -200,7 +202,7 @@ class KafkaUtilsTest {
         var configs = readConfigs("gameEventsConsumer-withoutGroupIdAndProps");
         var props = KafkaUtils.createGameEventConsumerProps(configs, 2,null);
 
-        Assertions.assertEquals(8, props.size());
+        Assertions.assertEquals(9, props.size());
         Assertions.assertNotNull(props.getProperty(GROUP_INSTANCE_ID_CONFIG));
         Assertions.assertEquals(props.getProperty(GROUP_INSTANCE_ID_CONFIG).length(), UUID.randomUUID().toString().length());
         Map.of(BOOTSTRAP_SERVERS_CONFIG, "localhost:9091,localhost:9092",
@@ -209,7 +211,8 @@ class KafkaUtilsTest {
                 GROUP_ID_CONFIG, "oasis-game-event-consumer-2",
                 AUTO_OFFSET_RESET_CONFIG, KafkaConstants.EARLIEST,
                 MAX_POLL_RECORDS_CONFIG, "500",
-                ENABLE_AUTO_COMMIT_CONFIG, "true").forEach((k, v) -> {
+                ENABLE_AUTO_COMMIT_CONFIG, "false",
+                PARTITION_ASSIGNMENT_STRATEGY_CONFIG, CooperativeStickyAssignor.class.getName()).forEach((k, v) -> {
             Assertions.assertEquals(v, props.get(k));
         });
     }

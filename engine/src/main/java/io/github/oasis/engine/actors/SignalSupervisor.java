@@ -92,7 +92,13 @@ public class SignalSupervisor extends OasisBaseActor {
 
         if (signal instanceof EventCreatable) {
             ((EventCreatable) signal).generateEvent()
-                    .ifPresent(event -> getContext().getParent().tell(new EventMessage(event, signalMessage.getContext(), null), getSelf()));
+                    .ifPresent(event -> {
+                        // the new event is work of the event that caused the signal
+                        if (signalMessage.getContext() != null) {
+                            signalMessage.getContext().workStarted();
+                        }
+                        getContext().getParent().tell(new EventMessage(event, signalMessage.getContext(), null), getSelf());
+                    });
         }
 
         router.route(signalMessage, getSelf());

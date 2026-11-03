@@ -67,6 +67,8 @@ oasis:
         #props:
 
       dispatcherConfigs:
+        # partitions of each game event topic, i.e. the most engines that can share one game
+        gameEventPartitions: 12
         props:
 
       engineEventConsumer:

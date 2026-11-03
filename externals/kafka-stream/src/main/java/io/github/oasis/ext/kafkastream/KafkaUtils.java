@@ -25,6 +25,7 @@ package io.github.oasis.ext.kafkastream;
 import io.github.oasis.core.utils.Texts;
 import io.github.oasis.core.utils.Utils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -118,7 +119,7 @@ final class KafkaUtils {
         return props;
     }
 
-    static Properties getBroadcastConsumerProps(KafkaConfigs kafkaConfigs) {
+    static Properties getBroadcastConsumerProps(KafkaConfigs kafkaConfigs, String engineId) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -132,8 +133,12 @@ final class KafkaUtils {
             consumerGroupId = kafkaConfigs.getBroadcastConsumer().getGroupId();
         }
 
+        // every engine must read every announcement, so each engine needs a group of its own. A group
+        // named after the engine keeps its position across restarts.
         if (Texts.isEmpty(consumerGroupId)) {
-            consumerGroupId = UUID.randomUUID().toString();
+            consumerGroupId = Texts.isEmpty(engineId)
+                    ? UUID.randomUUID().toString()
+                    : String.format(KafkaConstants.BROADCAST_CONSUMER_GROUP, engineId);
         }
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConfigs.getBrokerUrls());
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
@@ -168,6 +173,11 @@ final class KafkaUtils {
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         props.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, consumerGroupInstanceId);
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, EARLIEST);
+
+        // offsets are committed only once the engine has finished the events, see KafkaConsumerRunner
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        // when an engine joins or leaves, only the partitions that change owner are revoked
+        props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, CooperativeStickyAssignor.class.getName());
 
         return props;
     }

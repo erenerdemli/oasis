@@ -39,6 +39,9 @@ public class ActorSignalCollector implements SignalCollector {
 
     @Override
     public void accept(Signal signal, ExecutionContext context, AbstractRule rule) {
+        if (context != null) {
+            context.workStarted();
+        }
         exchangeActor.tell(new SignalMessage(signal, context, rule), exchangeActor);
     }
 }

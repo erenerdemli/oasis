@@ -114,6 +114,7 @@ public class RuleChangeEventTest extends AbstractServiceTest {
         ElementUpdateRequest updateRequest = ElementUpdateRequest.builder()
                 .name("Updated Point Name")
                 .description("Updated description")
+                .version(addedElement.getVersion())
                 .build();
 
         doPatchSuccess("/games/" + gameId + "/elements/" + addedElement.getElementId(), updateRequest, ElementDef.class);

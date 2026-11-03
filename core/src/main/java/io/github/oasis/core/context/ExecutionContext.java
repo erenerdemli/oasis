@@ -20,6 +20,7 @@
 package io.github.oasis.core.context;
 
 import java.io.Serializable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Isuru Weerarathna
@@ -30,8 +31,31 @@ public class ExecutionContext implements Serializable {
     private String userTimeZone;
     private GameContext gameContext;
 
+    // work still to do for the event this context belongs to, null when nobody waits for it
+    private transient Completion completion;
+
     public GameContext getGameContext() {
         return gameContext;
+    }
+
+    /**
+     * Counts one more piece of work for the event, such as a signal it produced or an event one
+     * of its signals produced.
+     */
+    public void workStarted() {
+        if (completion != null) {
+            completion.pending.incrementAndGet();
+        }
+    }
+
+    /**
+     * Marks one piece of work for the event done. When the last one is done, the event is
+     * finished: all its signals are consumed and its awards are written.
+     */
+    public void workFinished() {
+        if (completion != null && completion.pending.decrementAndGet() == 0) {
+            completion.onFinished.run();
+        }
     }
 
     public int getUserTimeOffset() {
@@ -69,6 +93,25 @@ public class ExecutionContext implements Serializable {
             context.userTimeOffset = offSetInSeconds;
             context.userTimeZone = timeZone;
             return this;
+        }
+
+        /**
+         * Runs the given action once the event and all the work it caused are done. The event
+         * itself is the first piece of work, finished with {@link ExecutionContext#workFinished()}.
+         */
+        public Builder whenFinished(Runnable onFinished) {
+            context.completion = new Completion(onFinished);
+            return this;
+        }
+    }
+
+    private static class Completion {
+
+        private final AtomicInteger pending = new AtomicInteger(1);
+        private final Runnable onFinished;
+
+        private Completion(Runnable onFinished) {
+            this.onFinished = onFinished;
         }
     }
 }

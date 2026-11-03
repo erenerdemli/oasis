@@ -144,6 +144,9 @@ public class OasisSupervisor extends OasisBaseActor {
         GameContext gameContext = contextMap.computeIfAbsent(event.getGameId(), this::loadGameContext);
         if (gameContext != GameContext.NOT_FOUND || gameContext.fallsWithinGamePeriod(event.getTimestamp())) {
             gameProcessors.route(new GameEventMessage(event, gameContext, eventMessage.getExternalMessageId()), getSelf());
+        } else {
+            // dropped, so the source must not wait for it
+            ExternalParty.EXTERNAL_PARTY.get(getContext().getSystem()).ackMessage(event.getGameId(), eventMessage.getExternalMessageId());
         }
     }
 

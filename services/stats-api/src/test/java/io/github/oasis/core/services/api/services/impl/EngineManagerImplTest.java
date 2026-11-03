@@ -26,7 +26,9 @@ import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
+import io.github.oasis.core.external.PaginatedResult;
 import io.github.oasis.core.external.messages.EngineMessage;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import io.github.oasis.core.external.messages.GameState;
 import io.github.oasis.core.model.GameStatus;
@@ -40,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -83,28 +86,39 @@ public class EngineManagerImplTest {
     }
 
     @Test
-    void testGameEventConsumeGameExists() throws OasisApiException {
-        ArgumentCaptor<String> newGameStatusCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Integer> gameIdCapture = ArgumentCaptor.forClass(Integer.class);
-        ArgumentCaptor<Long> updatedAtCapture = ArgumentCaptor.forClass(Long.class);
-
-        var msg = new EngineStatusChangedMessage(GAME_ID, GameState.PAUSED, "engine-abcd", 123L, null);
-        subscription.invoke(msg);
-
-        Mockito.verify(gameService, Mockito.times(1))
-                .changeStatusOfGameWithoutPublishing(gameIdCapture.capture(), newGameStatusCapture.capture(), updatedAtCapture.capture());
-        assertEquals(gameIdCapture.getValue(), GAME_ID);
-        assertEquals(newGameStatusCapture.getValue(), "paused");
-        assertEquals(updatedAtCapture.getValue(), 123L);
-    }
-
-    @Test
-    void testGameEventConsumeGameNotExists() throws OasisApiException {
-        var msg = new EngineStatusChangedMessage(9999, GameState.STOPPED, "engine-abcd", 234L, null);
-        subscription.invoke(msg);
+    void testEngineReportDoesNotChangeGameStatus() throws OasisApiException {
+        subscription.invoke(new EngineStatusChangedMessage(GAME_ID, GameState.STOPPED, "engine-abcd", 123L, null));
+        subscription.invoke(new EngineStatusChangedMessage(9999, GameState.STARTED, "engine-abcd", 234L, null));
 
         Mockito.verify(gameService, Mockito.never())
                 .changeStatusOfGameWithoutPublishing(Mockito.anyInt(), Mockito.anyString(), Mockito.anyLong());
+        Mockito.verify(gameService, Mockito.never())
+                .changeStatusOfGame(Mockito.anyInt(), Mockito.anyString(), Mockito.anyLong());
+    }
+
+    @Test
+    void testEngineStartAnnouncesStartedGamesAgain() throws Exception {
+        Game stoppedGame = TEST_GAME.toBuilder().id(2).build();
+        Mockito.when(gameService.listAllGames("0", 100))
+                .thenReturn(new PaginatedResult<>("-1", List.of(TEST_GAME, stoppedGame)));
+        Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(gameStatus(GAME_ID, "STARTED"));
+        Mockito.when(gameService.getCurrentGameStatus(2)).thenReturn(gameStatus(2, "STOPPED"));
+
+        subscription.engineStarted(new EngineStartedMessage("engine-2", 345L));
+
+        Mockito.verify(eventDispatcher, Mockito.times(1)).prepareGameStream(GAME_ID);
+        Mockito.verify(eventDispatcher, Mockito.never()).prepareGameStream(2);
+        ArgumentCaptor<EngineMessage> messages = ArgumentCaptor.forClass(EngineMessage.class);
+        Mockito.verify(eventDispatcher, Mockito.atLeastOnce()).broadcast(messages.capture());
+        assertTrue(messages.getAllValues().stream().allMatch(m -> m.getScope().getGameId() == GAME_ID));
+        assertEquals(EngineMessage.GAME_STARTED, messages.getValue().getType());
+    }
+
+    private static GameStatus gameStatus(int gameId, String status) {
+        GameStatus gameStatus = new GameStatus();
+        gameStatus.setGameId(gameId);
+        gameStatus.setStatus(status);
+        return gameStatus;
     }
 
     @Test
@@ -112,11 +126,11 @@ public class EngineManagerImplTest {
         subscription = Mockito.mock(MockedEngineSubscription.class);
         engineManager = new EngineManagerImpl(elementService, gameService, eventDispatcher, subscription);
         engineManager.beforeInitialized();
-        Mockito.verify(subscription, Mockito.times(1)).subscribe(Mockito.any());
+        Mockito.verify(subscription, Mockito.times(1)).subscribe(Mockito.any(), Mockito.any());
 
         Mockito.clearInvocations(subscription);
         engineManager = new EngineManagerImpl(elementService, gameService, eventDispatcher, null);
-        Mockito.verify(subscription, Mockito.never()).subscribe(Mockito.any());
+        Mockito.verify(subscription, Mockito.never()).subscribe(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -204,7 +218,7 @@ public class EngineManagerImplTest {
     }
 
     @Test
-    void notifyRuleChange_GameNotRunning_ShouldNotBroadcast() throws Exception {
+    void notifyRuleChange_GameNotRunning_ShouldStillBroadcast() throws Exception {
         // Setup: Game is stopped
         GameStatus stoppedStatus = new GameStatus();
         stoppedStatus.setGameId(GAME_ID);
@@ -216,12 +230,12 @@ public class EngineManagerImplTest {
         // Act
         engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
 
-        // Verify: Should NOT broadcast to engine
-        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+        // Verify: a stale admin status must not block the change; the engine ignores it for a game it does not run
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(Mockito.any(EngineMessage.class));
     }
 
     @Test
-    void notifyRuleChange_GamePaused_ShouldNotBroadcast() throws Exception {
+    void notifyRuleChange_GamePaused_ShouldStillBroadcast() throws Exception {
         // Setup: Game is paused
         GameStatus pausedStatus = new GameStatus();
         pausedStatus.setGameId(GAME_ID);
@@ -233,12 +247,12 @@ public class EngineManagerImplTest {
         // Act
         engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.UPDATE, GAME_ID, elementDef);
 
-        // Verify: Should NOT broadcast to engine (game not running)
-        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+        // Verify: a stale admin status must not block the change; the engine ignores it for a game it does not run
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(Mockito.any(EngineMessage.class));
     }
 
     @Test
-    void notifyRuleChange_GameStatusNull_ShouldNotBroadcast() throws Exception {
+    void notifyRuleChange_GameStatusNull_ShouldStillBroadcast() throws Exception {
         // Setup: No game status found
         Mockito.when(gameService.getCurrentGameStatus(GAME_ID)).thenReturn(null);
 
@@ -247,12 +261,12 @@ public class EngineManagerImplTest {
         // Act
         engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
 
-        // Verify: Should NOT broadcast to engine
-        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+        // Verify: a stale admin status must not block the change; the engine ignores it for a game it does not run
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(Mockito.any(EngineMessage.class));
     }
 
     @Test
-    void notifyRuleChange_GameStatusCheckThrowsException_ShouldNotBroadcast() throws Exception {
+    void notifyRuleChange_GameStatusCheckThrowsException_ShouldStillBroadcast() throws Exception {
         // Setup: Exception when checking game status
         Mockito.when(gameService.getCurrentGameStatus(GAME_ID))
                 .thenThrow(new RuntimeException("Database error"));
@@ -262,8 +276,8 @@ public class EngineManagerImplTest {
         // Act - should not throw
         engineManager.notifyRuleChange(RuleChangeEvent.ChangeType.ADD, GAME_ID, elementDef);
 
-        // Verify: Should NOT broadcast to engine (error getting status, assume not running)
-        Mockito.verify(eventDispatcher, Mockito.never()).broadcast(Mockito.any(EngineMessage.class));
+        // Verify: a stale admin status must not block the change; the engine ignores it for a game it does not run
+        Mockito.verify(eventDispatcher, Mockito.times(1)).broadcast(Mockito.any(EngineMessage.class));
     }
 
     private ElementDef createTestElementDef() {
@@ -278,6 +292,7 @@ public class EngineManagerImplTest {
     private static class MockedEngineSubscription implements EngineManagerSubscription {
 
         private Consumer<EngineStatusChangedMessage> consumer;
+        private Consumer<EngineStartedMessage> startedConsumer;
 
         @Override
         public void init(OasisConfigs configs) {
@@ -285,12 +300,23 @@ public class EngineManagerImplTest {
         }
 
         @Override
-        public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer) {
+        public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer,
+                              Consumer<EngineStartedMessage> engineStartedMessageConsumer) {
             this.consumer = engineStatusChangedMessageConsumer;
+            this.startedConsumer = engineStartedMessageConsumer;
+        }
+
+        @Override
+        public int countEnginesReading(int gameId) {
+            return 0;
         }
 
         void invoke(EngineStatusChangedMessage msg) {
             this.consumer.accept(msg);
+        }
+
+        void engineStarted(EngineStartedMessage msg) {
+            this.startedConsumer.accept(msg);
         }
 
         @Override

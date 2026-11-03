@@ -35,6 +35,7 @@ import com.rabbitmq.client.ShutdownSignalException;
 import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.exception.OasisRuntimeException;
 import io.github.oasis.core.external.EngineManagerSubscription;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,8 +87,12 @@ public class RabbitEngineManagerSubscription implements EngineManagerSubscriptio
         }
     }
 
+    /**
+     * Rabbit engines do not announce their start, so the second consumer is never called.
+     */
     @Override
-    public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer) {
+    public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer,
+                          Consumer<EngineStartedMessage> engineStartedMessageConsumer) {
         if (consumer != null) {
             throw new OasisRuntimeException("subscribe method has already been invoked before!");
         }
@@ -102,6 +107,11 @@ public class RabbitEngineManagerSubscription implements EngineManagerSubscriptio
         } catch (IOException e) {
             throw new OasisRuntimeException("Unable to subscribe to RabbitMQ engine status queue!", e);
         }
+    }
+
+    @Override
+    public int countEnginesReading(int gameId) {
+        throw new UnsupportedOperationException("Rabbit stream cannot tell how many engines read a game.");
     }
 
     @Override

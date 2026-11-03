@@ -28,6 +28,19 @@ package io.github.oasis.ext.kafkastream;
 final class KafkaConstants {
 
     static final String GAME_EVENT_CONSUMER_GROUP = "oasis-game-event-consumer-%d";
+    static final String BROADCAST_CONSUMER_GROUP = "oasis-broadcast-%s";
+
+    /**
+     * Partitions of a game event topic, so that several engines can share one game.
+     */
+    static final int DEFAULT_GAME_EVENT_PARTITIONS = 12;
+
+    /**
+     * Record header naming the message type on the engine events topic. Game status changes carry
+     * no header, an engine start carries {@link #ENGINE_STARTED}.
+     */
+    static final String HEADER_MESSAGE_TYPE = "oasis.message.type";
+    static final String ENGINE_STARTED = "ENGINE_STARTED";
 
     static final String TOPIC_GAME_EVENTS = "oasis.game.events";
     static final String TOPIC_GAME_ANNOUNCEMENTS = "oasis.game.announcements";

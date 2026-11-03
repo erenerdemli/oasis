@@ -53,4 +53,12 @@ public interface IEngineManager {
      */
     void notifyRuleChange(RuleChangeEvent.ChangeType changeType, int gameId, ElementDef elementDef) throws EngineManagerException;
 
+    /**
+     * Number of engines currently reading the events of the game.
+     *
+     * @param gameId the game ID
+     * @return engine count, 0 when no engine reads the game
+     */
+    int countEnginesReading(int gameId);
+
 }

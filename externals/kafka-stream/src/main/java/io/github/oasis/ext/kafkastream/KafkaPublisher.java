@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -61,8 +62,21 @@ class KafkaPublisher implements Closeable {
     }
 
     public void publishRecord(String topic, String key, Object payload) throws IOException {
+        send(new ProducerRecord<>(topic, key, MessageSerializer.serialize(payload)));
+    }
+
+    /**
+     * Publishes a record whose message type is named by the {@link KafkaConstants#HEADER_MESSAGE_TYPE} header.
+     */
+    public void publishRecord(String topic, String key, String messageType, Object payload) throws IOException {
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, MessageSerializer.serialize(payload));
+        record.headers().add(KafkaConstants.HEADER_MESSAGE_TYPE, messageType.getBytes(StandardCharsets.UTF_8));
+        send(record);
+    }
+
+    private void send(ProducerRecord<String, String> record) throws IOException {
         try {
-            kafkaProducer.send(new ProducerRecord<>(topic, key, MessageSerializer.serialize(payload))).get();
+            kafkaProducer.send(record).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new IOException("Error occurred while submitting event!", e);
         }

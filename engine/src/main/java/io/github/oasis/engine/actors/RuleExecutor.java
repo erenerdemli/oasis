@@ -31,8 +31,6 @@ import io.github.oasis.engine.actors.cmds.RuleRemovedMessage;
 import io.github.oasis.engine.actors.cmds.RuleUpdatedMessage;
 import io.github.oasis.engine.actors.cmds.RuleCacheClearMessage;
 import io.github.oasis.engine.actors.cmds.StartRuleExecutionCommand;
-import io.github.oasis.engine.ext.ExternalParty;
-import io.github.oasis.engine.ext.ExternalPartyImpl;
 import io.github.oasis.engine.ext.RulesImpl;
 import io.github.oasis.engine.factory.Processors;
 import io.github.oasis.engine.model.RuleExecutionContext;
@@ -59,8 +57,6 @@ public class RuleExecutor extends OasisBaseActor {
 
     private final Processors processors;
 
-    private ExternalPartyImpl eventSource;
-
     public RuleExecutor(EngineContext context) {
         super(context);
 
@@ -74,13 +70,6 @@ public class RuleExecutor extends OasisBaseActor {
                 .match(EventMessage.class, this::processEvent)
                 .match(OasisRuleMessage.class, this::ruleModified)
                 .build();
-    }
-
-    @Override
-    public void preStart() throws Exception {
-        super.preStart();
-
-        eventSource = ExternalParty.EXTERNAL_PARTY.get(getContext().getSystem());
     }
 
     @Override
@@ -116,11 +105,11 @@ public class RuleExecutor extends OasisBaseActor {
     }
 
     private void processEvent(EventMessage eventMessage) {
-        RulesImpl.GameRules rules = getGameRuleRef(eventMessage.getEvent().getGameId());
         Event event = eventMessage.getEvent();
         log.info("[{}#{}] Processing event {}", parentId, myId, event);
-        Iterator<AbstractRule> allRulesForEvent = rules.getAllRulesForEvent(event);
         try {
+            RulesImpl.GameRules rules = getGameRuleRef(event.getGameId());
+            Iterator<AbstractRule> allRulesForEvent = rules.getAllRulesForEvent(event);
             while (allRulesForEvent.hasNext()) {
                 AbstractRule rule = allRulesForEvent.next();
 
@@ -132,18 +121,14 @@ public class RuleExecutor extends OasisBaseActor {
                 processor.accept(event, eventMessage.getContext());
             }
 
-            Object messageId = eventMessage.getExternalMessageId();
-            if (messageId != null) {
-                log.info("[{}#{}] Acknowledging successful event for message id {} {}", parentId, myId, messageId, event);
-                eventSource.ackMessage(event.getGameId(), messageId);
-            }
-
         } catch (Exception e) {
-            log.error(e,"[{}#{}] Error occurred while processing event {}", parentId, myId, event);
-
-            Object messageId = eventMessage.getExternalMessageId();
-            log.error("[{}#{}] Acknowledging failure event for message id {}", parentId, myId, messageId);
-            eventSource.nackMessage(event.getGameId(), messageId);
+            log.error(e,"[{}#{}] Error occurred while processing event {} (message id {})", parentId, myId, event,
+                    eventMessage.getExternalMessageId());
+        } finally {
+            // the source is told once the signals of the event are consumed too, see RuleSupervisor
+            if (eventMessage.getContext() != null) {
+                eventMessage.getContext().workFinished();
+            }
         }
     }
 

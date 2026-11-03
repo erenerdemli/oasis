@@ -23,6 +23,7 @@
 package io.github.oasis.core.external;
 
 import io.github.oasis.core.configs.OasisConfigs;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 
 import java.io.Closeable;
@@ -38,6 +39,12 @@ public interface EngineManagerSubscription extends Closeable {
 
     void init(OasisConfigs configs);
 
-    void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer);
+    void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer,
+                   Consumer<EngineStartedMessage> engineStartedMessageConsumer);
+
+    /**
+     * Number of engines currently reading the events of the given game.
+     */
+    int countEnginesReading(int gameId);
 
 }

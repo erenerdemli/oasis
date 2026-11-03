@@ -95,8 +95,10 @@ public class ConsumerTest extends BaseKafkaTest {
             awaitFor(3000);
             assertConsumerGroups(1, KafkaConstants.TOPIC_GAME_ANNOUNCEMENTS);
 
-            List<EngineStatusChangedMessage> statusMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+            EngineMessages engineMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+            List<EngineStatusChangedMessage> statusMessages = engineMessages.statuses();
 
+            Assertions.assertEquals(List.of(ENGINE_ID_1), startedEngineIds(engineMessages));
             Assertions.assertEquals(5, statusMessages.size());
             assertEngineStatusMessage(statusMessages.get(0), 1, ENGINE_ID_1, GameState.CREATED);
             assertEngineStatusMessage(statusMessages.get(1), 1, ENGINE_ID_1, GameState.STARTED);
@@ -139,7 +141,8 @@ public class ConsumerTest extends BaseKafkaTest {
             awaitFor(3200);
             assertConsumerGroups(1, KafkaConstants.TOPIC_GAME_ANNOUNCEMENTS);
 
-            List<EngineStatusChangedMessage> statusMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+            EngineMessages engineMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+            List<EngineStatusChangedMessage> statusMessages = engineMessages.statuses();
 
             Assertions.assertEquals(10, statusMessages.size());
             assertEngineStatusMessage(statusMessages.get(0), 1, ENGINE_ID_1, GameState.CREATED);
@@ -235,8 +238,11 @@ public class ConsumerTest extends BaseKafkaTest {
 
         awaitFor(5000);
 
-        List<EngineStatusChangedMessage> statusMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+        EngineMessages engineMessages = readAllEngineMessages(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS);
+        List<EngineStatusChangedMessage> statusMessages = engineMessages.statuses();
 
+        Assertions.assertEquals(Set.of(ENGINE_ID_1, ENGINE_ID_2), new HashSet<>(startedEngineIds(engineMessages)));
+        Assertions.assertEquals(2, engineMessages.starts().size());
         Assertions.assertEquals(20, statusMessages.size());
         Assertions.assertEquals(10, statusMessages.stream().filter(m -> m.getEngineId().equals(ENGINE_ID_1)).count());
         Assertions.assertEquals(10, statusMessages.stream().filter(m -> m.getEngineId().equals(ENGINE_ID_2)).count());
@@ -269,7 +275,14 @@ public class ConsumerTest extends BaseKafkaTest {
         return new OasisConfigs.Builder().buildWithConfigs(configs);
     }
 
-    private List<EngineStatusChangedMessage> readAllEngineMessages(String inTopic) throws IOException {
+    /** Status reports and start announcements share the engine topic; the message type header tells them apart. */
+    private record EngineMessages(List<EngineStatusChangedMessage> statuses, List<EngineStartedMessage> starts) {}
+
+    private static List<String> startedEngineIds(EngineMessages engineMessages) {
+        return engineMessages.starts().stream().map(EngineStartedMessage::getEngineId).collect(Collectors.toList());
+    }
+
+    private EngineMessages readAllEngineMessages(String inTopic) throws IOException {
         Properties properties = new Properties();
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "oasis-unit-test-1");
         properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
@@ -281,16 +294,20 @@ public class ConsumerTest extends BaseKafkaTest {
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties);
         consumer.subscribe(Collections.singletonList(inTopic));
 
-        List<EngineStatusChangedMessage> orderedMessages = new ArrayList<>();
+        List<EngineStatusChangedMessage> statuses = new ArrayList<>();
+        List<EngineStartedMessage> starts = new ArrayList<>();
         try {
             int count = 0;
             do {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
 
                 for (ConsumerRecord<String, String> record : records) {
-                    EngineStatusChangedMessage message = MessageSerializer.deserialize(record.value(), EngineStatusChangedMessage.class);
-                    orderedMessages.add(message);
-                    System.out.println("Message received: " + message);
+                    if (KafkaEngineManagerSubscription.isEngineStarted(record)) {
+                        starts.add(MessageSerializer.deserialize(record.value(), EngineStartedMessage.class));
+                    } else {
+                        statuses.add(MessageSerializer.deserialize(record.value(), EngineStatusChangedMessage.class));
+                    }
+                    System.out.println("Message received: " + record.value());
                 }
                 if (records.isEmpty()) {
                     count++;
@@ -300,7 +317,7 @@ public class ConsumerTest extends BaseKafkaTest {
         } finally {
             consumer.close();
         }
-        return orderedMessages;
+        return new EngineMessages(statuses, starts);
     }
 
     @SuppressWarnings("unchecked")

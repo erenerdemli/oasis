@@ -28,6 +28,7 @@ import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.EventStreamFactory;
 import io.github.oasis.core.external.SourceStreamProvider;
 import io.github.oasis.core.external.messages.EngineMessage;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 
 import java.io.IOException;
@@ -77,8 +78,14 @@ public class TestDispatcherImpl implements EventStreamFactory {
             }
 
             @Override
-            public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer) {
+            public void subscribe(Consumer<EngineStatusChangedMessage> engineStatusChangedMessageConsumer,
+                                  Consumer<EngineStartedMessage> engineStartedMessageConsumer) {
 
+            }
+
+            @Override
+            public int countEnginesReading(int gameId) {
+                return 0;
             }
 
             @Override

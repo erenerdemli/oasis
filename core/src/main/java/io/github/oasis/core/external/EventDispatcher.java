@@ -68,6 +68,17 @@ public interface EventDispatcher extends Closeable {
      */
     void broadcast(EngineMessage message) throws Exception;
 
+    /**
+     * Prepares the event stream of a game before the game starts, e.g. so that several engines
+     * can share the game. This is called by admin api whenever a game starts. Streams that need no
+     * per game preparation keep this default.
+     *
+     * @param gameId game about to start.
+     * @throws Exception any exception thrown while preparing the stream.
+     */
+    default void prepareGameStream(int gameId) throws Exception {
+    }
+
     interface DispatcherContext {
         Map<String, Object> getConfigs();
     }

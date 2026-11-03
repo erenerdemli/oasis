@@ -23,6 +23,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.routing.Routee;
 import akka.routing.Router;
+import io.github.oasis.core.Event;
 import io.github.oasis.core.configs.OasisConfigs;
 import io.github.oasis.core.context.ExecutionContext;
 import io.github.oasis.engine.EngineContext;
@@ -31,6 +32,8 @@ import io.github.oasis.engine.actors.cmds.GameEventMessage;
 import io.github.oasis.engine.actors.cmds.OasisRuleMessage;
 import io.github.oasis.engine.actors.cmds.StartRuleExecutionCommand;
 import io.github.oasis.engine.actors.routers.UserRouting;
+import io.github.oasis.engine.ext.ExternalParty;
+import io.github.oasis.engine.ext.ExternalPartyImpl;
 import io.github.oasis.engine.model.ActorSignalCollector;
 import io.github.oasis.engine.model.RuleExecutionContext;
 
@@ -124,10 +127,16 @@ public class RuleSupervisor extends OasisBaseActor {
     }
 
     private void processEvent(GameEventMessage eventMessage) {
-        executor.route(new EventMessage(eventMessage.getEvent(),
-                    ExecutionContext.from(eventMessage.getGameContext()).withUserTz(engineTzOffset, engineTimezone).build(),
-                    eventMessage.getExternalMessageId()),
-                getSelf());
+        Event event = eventMessage.getEvent();
+        Object messageId = eventMessage.getExternalMessageId();
+        ExecutionContext.Builder context = ExecutionContext.from(eventMessage.getGameContext()).withUserTz(engineTzOffset, engineTimezone);
+        if (messageId != null) {
+            // the source holds the event until its signals are consumed, so an engine that stops
+            // before writing the awards leaves the event to be read again
+            ExternalPartyImpl eventSource = ExternalParty.EXTERNAL_PARTY.get(getContext().getSystem());
+            context.whenFinished(() -> eventSource.ackMessage(event.getGameId(), messageId));
+        }
+        executor.route(new EventMessage(event, context.build(), messageId), getSelf());
     }
 
     private void forwardRuleModifiedEvent(OasisRuleMessage ruleMessage) {

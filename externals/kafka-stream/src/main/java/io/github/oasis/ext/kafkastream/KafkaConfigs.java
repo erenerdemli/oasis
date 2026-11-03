@@ -49,6 +49,11 @@ class KafkaConfigs {
     static class DispatcherConfigs {
         private String clientId;
 
+        /**
+         * Partitions of each game event topic, i.e. the most engines that can share one game.
+         */
+        private Integer gameEventPartitions = KafkaConstants.DEFAULT_GAME_EVENT_PARTITIONS;
+
         private Map<String, String> props;
     }
 

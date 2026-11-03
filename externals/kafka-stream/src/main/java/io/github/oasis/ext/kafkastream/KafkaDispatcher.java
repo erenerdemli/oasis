@@ -26,13 +26,20 @@ import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.messages.EngineMessage;
 import io.github.oasis.core.utils.Utils;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Event dispatcher for Kafka.
@@ -41,17 +48,59 @@ import java.util.Optional;
  */
 class KafkaDispatcher extends KafkaPublisher implements EventDispatcher {
 
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaDispatcher.class);
+
+    private Admin kafkaAdmin;
+    private int gameEventPartitions = KafkaConstants.DEFAULT_GAME_EVENT_PARTITIONS;
+
     @Override
     public void init(DispatcherContext context) throws Exception {
         Map<String, Object> configs = context.getConfigs();
         KafkaConfigs kafkaConfigs = KafkaUtils.parseFrom(configs);
-
-        try (Admin kafkaAdmin = Admin.create(KafkaUtils.createAdminProps(kafkaConfigs))) {
-            createTopicsIfNotExists(kafkaAdmin);
+        if (kafkaConfigs.getDispatcherConfigs() != null && kafkaConfigs.getDispatcherConfigs().getGameEventPartitions() != null) {
+            gameEventPartitions = kafkaConfigs.getDispatcherConfigs().getGameEventPartitions();
         }
+
+        kafkaAdmin = Admin.create(KafkaUtils.createAdminProps(kafkaConfigs));
+        createTopicsIfNotExists(kafkaAdmin);
 
         // initialize producer...
         super.initialize(kafkaConfigs);
+    }
+
+    /**
+     * Creates the game's event topic with the configured partitions, or adds partitions to a topic
+     * that has fewer, so that the game can be shared by that many engines. A topic created by the
+     * broker on first use has the broker's default partitions only.
+     *
+     * Adding partitions moves some players to another partition, so their events already waiting
+     * may be read out of order once.
+     */
+    @Override
+    public void prepareGameStream(int gameId) throws Exception {
+        String topic = getTopicForGameEvents(String.valueOf(gameId));
+        Optional<TopicDescription> existing = describeTopic(topic);
+        if (existing.isEmpty()) {
+            LOG.info("Creating game event topic {} with {} partitions.", topic, gameEventPartitions);
+            createTopic(kafkaAdmin, new NewTopic(topic, Optional.of(gameEventPartitions), Optional.empty()));
+        } else if (existing.get().partitions().size() < gameEventPartitions) {
+            LOG.info("Increasing partitions of game event topic {} from {} to {}.",
+                    topic, existing.get().partitions().size(), gameEventPartitions);
+            kafkaAdmin.createPartitions(Collections.singletonMap(topic, NewPartitions.increaseTo(gameEventPartitions)))
+                    .all()
+                    .get();
+        }
+    }
+
+    private Optional<TopicDescription> describeTopic(String topic) throws Exception {
+        try {
+            return Optional.of(kafkaAdmin.describeTopics(Collections.singletonList(topic)).values().get(topic).get());
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                return Optional.empty();
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -80,6 +129,9 @@ class KafkaDispatcher extends KafkaPublisher implements EventDispatcher {
     public void close() {
         if (kafkaProducer != null) {
             kafkaProducer.close(Duration.ofSeconds(5));
+        }
+        if (kafkaAdmin != null) {
+            kafkaAdmin.close(Duration.ofSeconds(5));
         }
     }
 

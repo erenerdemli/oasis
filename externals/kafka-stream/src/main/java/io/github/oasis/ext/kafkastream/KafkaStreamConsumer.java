@@ -25,6 +25,7 @@ package io.github.oasis.ext.kafkastream;
 import io.github.oasis.core.context.RuntimeContextSupport;
 import io.github.oasis.core.external.MessageReceiver;
 import io.github.oasis.core.external.SourceStreamProvider;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import io.github.oasis.core.external.messages.FailedGameCommand;
 import io.github.oasis.core.external.messages.GameCommand;
@@ -42,10 +43,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author Isuru Weerarathna
@@ -58,7 +59,13 @@ class KafkaStreamConsumer implements SourceStreamProvider {
 
     public KafkaPublisher publisher;
 
-    private final Map<Integer, KafkaConsumerRunner> gameEventsConsumers = new ConcurrentHashMap<>();
+    /**
+     * How long closing waits for the game readers to finish and commit their events.
+     */
+    private static final long CLOSE_TIMEOUT_SECONDS = 40;
+
+    // keyed by topic, so that an acknowledged message id leads straight to its reader
+    private final Map<String, KafkaConsumerRunner> gameEventsConsumers = new ConcurrentHashMap<>();
     private KafkaConsumerRunner gameBroadcastConsumer;
 
     private ExecutorService consumerPool;
@@ -82,7 +89,7 @@ class KafkaStreamConsumer implements SourceStreamProvider {
         consumerPool = Executors.newCachedThreadPool();
 
         LOG.debug("Initializing kafka broadcast topic consumer...");
-        Properties broadcastingProps = KafkaUtils.getBroadcastConsumerProps(kafkaConfigs);
+        Properties broadcastingProps = KafkaUtils.getBroadcastConsumerProps(kafkaConfigs, engineId);
         String instanceId = broadcastingProps.getProperty(ConsumerConfig.GROUP_ID_CONFIG);
         String uniqueId = engineId + "::" + instanceId;
         gameBroadcastConsumer = new KafkaBroadcastConsumerRunner(sinkRef, KafkaConstants.TOPIC_GAME_ANNOUNCEMENTS, uniqueId);
@@ -90,6 +97,23 @@ class KafkaStreamConsumer implements SourceStreamProvider {
 
         LOG.info("Connecting to kafka broadcasting topic: {} with configs {}...", KafkaConstants.TOPIC_GAME_ANNOUNCEMENTS, broadcastingProps);
         consumerPool.submit(gameBroadcastConsumer);
+
+        announceEngineStarted();
+    }
+
+    /**
+     * Tells the admin api that this engine has started, so that it announces the running games
+     * again and this engine picks them up. The engine's broadcast group keeps its position across
+     * restarts, so the announcements reach it whenever they are sent.
+     */
+    private void announceEngineStarted() {
+        EngineStartedMessage message = new EngineStartedMessage(engineId, System.currentTimeMillis());
+        try {
+            publisher.publishRecord(KafkaConstants.TOPIC_ENGINE_RELATED_EVENTS, engineId, KafkaConstants.ENGINE_STARTED, message);
+            LOG.info("Engine {} announced its start.", engineId);
+        } catch (IOException e) {
+            LOG.error("Unable to announce the start of engine {}! Running games must be started again from the admin.", engineId, e);
+        }
     }
 
     @Override
@@ -101,38 +125,37 @@ class KafkaStreamConsumer implements SourceStreamProvider {
         }
 
         int gameId = gameCommand.getGameId();
+        String topic = KafkaUtils.getGameEventTopicName(gameId);
         LOG.info("Processing game command. [Game: {}, Status = {}]", gameId, gameCommand.getStatus());
-        if (gameCommand.getStatus() == GameLifecycle.START || gameCommand.getStatus() == GameLifecycle.CREATE) {
-
-            KafkaConsumerRunner gameReader = new KafkaConsumerRunner(KafkaUtils.getGameEventTopicName(gameId));
-            try {
-                if (gameCommand.getStatus() == GameLifecycle.START) {
-                    closeGameIfRunning(gameId);
-
-                    gameEventsConsumers.put(gameId, gameReader);
-                    GameEventHandler handler = new GameEventHandler(sinkRef);
-
+        if (gameCommand.getStatus() == GameLifecycle.START) {
+            // a game is started again whenever an engine starts, so the readers of the engines
+            // already running it keep their partitions instead of leaving and rejoining the group
+            if (gameEventsConsumers.containsKey(topic)) {
+                LOG.info("Already reading game {} events.", gameId);
+            } else {
+                GameEventOffsets offsets = new GameEventOffsets();
+                KafkaConsumerRunner gameReader = new KafkaConsumerRunner(topic, offsets);
+                try {
                     Properties thisConsumerProps = KafkaUtils.createGameEventConsumerProps(providedKafkaConfigs, gameId, engineId);
                     LOG.info("Subscribing to game {} event topic with configs {}...", gameId, thisConsumerProps);
-                    gameReader.init(thisConsumerProps, handler);
+                    gameReader.init(thisConsumerProps, new GameEventHandler(sinkRef, offsets));
+                    gameEventsConsumers.put(topic, gameReader);
                     consumerPool.submit(gameReader);
+                } catch (Exception e) {
+                    LOG.error("Error initializing Kafka consumer for game {}!", gameId, e);
+                    gameEventsConsumers.remove(topic);
+                    Utils.silentClose(gameReader, (ex) -> LOG.error("Unable to close connection to kafka game event topic!", ex));
+
+                    // we send game stopped message, if failed.
+                    EngineStatusChangedMessage message = createStatusChangedMessage(gameCommand);
+                    message.setState(GameState.STOPPED);
+                    silentPublish(message);
+                    return;
                 }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                LOG.error("Error initializing Kafka consumer for game {}!", gameId, e);
-                gameEventsConsumers.remove(gameId);
-                Utils.silentClose(gameReader, (ex) -> LOG.error("Unable to close connection to kafka game event topic!", ex));
-
-                // we send game stopped message, if failed.
-                EngineStatusChangedMessage message = createStatusChangedMessage(gameCommand);
-                message.setState(GameState.STOPPED);
-                silentPublish(message);
-                return;
             }
 
         } else if (gameCommand.getStatus() == GameLifecycle.REMOVE) {
-            Closeable removedRef = gameEventsConsumers.remove(gameId);
+            Closeable removedRef = gameEventsConsumers.remove(topic);
             if (Objects.nonNull(removedRef)) {
                 LOG.info("Game consumer {} disconnected!", gameId);
                 Utils.silentClose(removedRef, (e) -> LOG.error("Unable to close connection to kafka game event topic!", e));
@@ -164,39 +187,51 @@ class KafkaStreamConsumer implements SourceStreamProvider {
         }
     }
 
-    private synchronized void closeGameIfRunning(int gameId) throws IOException {
-        if (gameEventsConsumers.containsKey(gameId)) {
-            LOG.warn("Closing kafka consumer related to game {}...", gameId);
-            gameEventsConsumers.get(gameId).close();
-            gameEventsConsumers.remove(gameId);
-        }
-    }
-
     @Override
     public void ackMessage(int gameId, Object messageId) {
-        // kafka does not support ack per message. This ack will automatically be done by consumer
+        finished(messageId);
     }
 
     @Override
     public void ackMessage(Object messageId) {
-        // kafka does not support ack per message. This ack will automatically be done by consumer
+        finished(messageId);
     }
 
+    /**
+     * A failed event is not read again, as before: it is logged by the engine and skipped.
+     */
     @Override
     public void nackMessage(int gameId, Object messageId) {
-        // kafka does not support nack per message.
+        finished(messageId);
     }
 
     @Override
     public void nackMessage(Object messageId) {
-        // kafka does not support nack per message.
+        finished(messageId);
     }
 
+    /**
+     * Marks a game event finished, so that its reader may commit past it. Broadcast messages are
+     * committed one by one as they are read, so their ids find no reader here.
+     */
+    private void finished(Object messageId) {
+        if (messageId instanceof KafkaMessageId) {
+            KafkaMessageId id = (KafkaMessageId) messageId;
+            KafkaConsumerRunner reader = gameEventsConsumers.get(id.getTopic());
+            if (reader != null) {
+                reader.finished(id);
+            }
+        }
+    }
+
+    /**
+     * Stops reading and waits until the game readers have committed what the engine finished. The
+     * engine must keep running meanwhile, see OasisEngine.
+     */
     @Override
     public void close() {
-        Set<Map.Entry<Integer, KafkaConsumerRunner>> entries = gameEventsConsumers.entrySet();
-        for (Map.Entry<Integer, KafkaConsumerRunner> entry : entries) {
-            entry.getValue().close();
+        for (KafkaConsumerRunner reader : gameEventsConsumers.values()) {
+            reader.close();
         }
 
         if (gameBroadcastConsumer != null) {
@@ -204,6 +239,13 @@ class KafkaStreamConsumer implements SourceStreamProvider {
         }
         // gracefully shutdown
         consumerPool.shutdown();
+        try {
+            if (!consumerPool.awaitTermination(CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                LOG.warn("Game readers did not stop within {} seconds.", CLOSE_TIMEOUT_SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
 

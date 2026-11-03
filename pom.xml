@@ -35,7 +35,9 @@
         <hikari.version>5.1.0</hikari.version>
         <liquibase.version>4.24.0</liquibase.version>
         <springdoc.version>1.7.0</springdoc.version>
-        <testcontainers.version>1.16.0</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- Mockito 5.8.0's own version; assertj otherwise brings 1.12.21, which cannot mock on Java 21 -->
+        <bytebuddy.version>1.14.10</bytebuddy.version>
         <kafkaclient.version>2.8.1</kafkaclient.version>
     </properties>
 
@@ -109,6 +111,16 @@
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.version}</version>
                 <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${bytebuddy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${bytebuddy.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

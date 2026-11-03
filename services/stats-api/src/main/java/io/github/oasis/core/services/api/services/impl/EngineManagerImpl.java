@@ -27,8 +27,10 @@ import io.github.oasis.core.elements.ElementDef;
 import io.github.oasis.core.external.EngineManagerSubscription;
 import io.github.oasis.core.external.EventDispatcher;
 import io.github.oasis.core.external.messages.EngineMessage;
+import io.github.oasis.core.external.messages.EngineStartedMessage;
 import io.github.oasis.core.external.messages.EngineStatusChangedMessage;
 import io.github.oasis.core.external.messages.GameState;
+import io.github.oasis.core.external.PaginatedResult;
 import io.github.oasis.core.model.GameStatus;
 import io.github.oasis.core.services.api.exceptions.EngineManagerException;
 import io.github.oasis.core.services.api.exceptions.ErrorCodes;
@@ -36,7 +38,6 @@ import io.github.oasis.core.services.api.services.IElementService;
 import io.github.oasis.core.services.api.services.IEngineManager;
 import io.github.oasis.core.services.api.services.IGameService;
 import io.github.oasis.core.services.events.RuleChangeEvent;
-import io.github.oasis.core.services.exceptions.OasisApiException;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,8 @@ import java.util.List;
 public class EngineManagerImpl implements IEngineManager, Closeable {
 
     private static final Logger LOG = LoggerFactory.getLogger(EngineManagerImpl.class);
+
+    private static final int RESUME_PAGE_SIZE = 100;
 
     private final IElementService elementService;
     private final IGameService gameService;
@@ -95,6 +98,8 @@ public class EngineManagerImpl implements IEngineManager, Closeable {
     private void prepareGameForExecution(Game game) throws Exception {
         Integer gameId = game.getId();
 
+        dispatchSupport.prepareGameStream(gameId);
+
         // first we will send the game create message
         EngineMessage createdMessage = EngineMessage.createGameLifecycleEvent(gameId, GameState.CREATED);
         dispatchSupport.broadcast(createdMessage);
@@ -123,22 +128,46 @@ public class EngineManagerImpl implements IEngineManager, Closeable {
     private void initEngineStatusSubscription() {
         if (engineManagerSubscription != null) {
             LOG.info("Subscribing to engine status stream {}", engineManagerSubscription.getClass().getName());
-            engineManagerSubscription.subscribe(this::consume);
+            engineManagerSubscription.subscribe(this::consume, this::resumeRunningGames);
         }
     }
 
+    /**
+     * Engine reports are only logged. The game status is what the admin asked for: with several
+     * engines a report speaks for one engine only, and the last one to arrive would otherwise
+     * decide the status of the game. Whether engines actually read a game is
+     * {@link #countEnginesReading(int)}.
+     */
     private void consume(EngineStatusChangedMessage message) {
         LOG.info("Engine status change event received! {}", message);
-        try {
-            Game game = gameService.readGame(message.getGameId());
-            if (game == null) {
-                LOG.error("No game definition is found by game id {}!", message.getGameId());
-                return;
+    }
+
+    /**
+     * Announces every started game again when an engine starts, so that the engine picks the
+     * games up. Engines already running a game ignore the repeated start and rules.
+     */
+    private void resumeRunningGames(EngineStartedMessage message) {
+        LOG.info("Engine {} started. Announcing running games again...", message.getEngineId());
+        String page = "0";
+        PaginatedResult<Game> games;
+        do {
+            games = gameService.listAllGames(page, RESUME_PAGE_SIZE);
+            for (Game game : games.getRecords()) {
+                if (isGameRunning(game.getId())) {
+                    try {
+                        notifyGameStatusChange(GameState.STARTED, game);
+                    } catch (EngineManagerException e) {
+                        LOG.error("Unable to announce game {} again for engine {}!", game.getId(), message.getEngineId(), e);
+                    }
+                }
             }
-            gameService.changeStatusOfGameWithoutPublishing(message.getGameId(), message.getState().name().toLowerCase(), message.getTs());
-        } catch (OasisApiException e) {
-            LOG.error("Unable to change game status in admin database!", e);
-        }
+            page = games.getNextCursor();
+        } while (!games.isCompleted());
+    }
+
+    @Override
+    public int countEnginesReading(int gameId) {
+        return engineManagerSubscription.countEnginesReading(gameId);
     }
 
     @Override

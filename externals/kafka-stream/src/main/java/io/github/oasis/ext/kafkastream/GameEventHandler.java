@@ -30,11 +30,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-
 /**
  * @author Isuru Weerarathna
  */
@@ -43,38 +38,35 @@ public class GameEventHandler {
     private static final Logger LOG = LoggerFactory.getLogger(GameEventHandler.class);
 
     private final MessageReceiver sinkRef;
+    private final GameEventOffsets offsets;
 
-    public GameEventHandler(MessageReceiver sinkRef) {
+    public GameEventHandler(MessageReceiver sinkRef, GameEventOffsets offsets) {
         this.sinkRef = sinkRef;
+        this.offsets = offsets;
     }
 
-    public KafkaEventsProcessingResult processEvents(ConsumerRecords<String, String> polledRecords) {
-        Iterator<ConsumerRecord<String, String>> iterator = polledRecords.iterator();
-        Map<TopicPartition, Long> partitionWiseOffset = new HashMap<>();
-
-        try {
-
-            while (iterator.hasNext()) {
-                ConsumerRecord<String, String> record = iterator.next();
-                String value = record.value();
-
-                EngineMessage message = MessageSerializer.deserialize(value, EngineMessage.class);
+    /**
+     * Hands the events to the engine. Each event carries its position as message id, and the engine
+     * acknowledges it by that id once it has finished. An event that cannot be read or handed over
+     * is skipped.
+     */
+    public void processEvents(ConsumerRecords<String, String> polledRecords) {
+        for (ConsumerRecord<String, String> record : polledRecords) {
+            TopicPartition topicPartition = new TopicPartition(record.topic(), record.partition());
+            offsets.started(topicPartition, record.offset());
+            try {
+                EngineMessage message = MessageSerializer.deserialize(record.value(), EngineMessage.class);
+                message.setMessageId(KafkaMessageId.builder()
+                        .topic(record.topic())
+                        .partition(record.partition())
+                        .offset(record.offset())
+                        .build());
                 sinkRef.submit(message);
-
-                TopicPartition topicPartition = new TopicPartition(record.topic(), record.partition());
-                partitionWiseOffset.put(topicPartition, record.offset());
+            } catch (Exception e) {
+                LOG.error("Skipping game event at {}-{}@{} that cannot be handed to the engine!",
+                        record.topic(), record.partition(), record.offset(), e);
+                offsets.finished(topicPartition, record.offset());
             }
-
-            return KafkaEventsProcessingResult.builder()
-                    .partitionWiseOffsets(partitionWiseOffset)
-                    .build();
-
-        } catch (Exception e) {
-            LOG.error("Error occurred while reading game events!", e);
-            return KafkaEventsProcessingResult.builder()
-                    .partitionWiseOffsets(partitionWiseOffset)
-                    .exceptionThrown(e)
-                    .build();
         }
     }
 

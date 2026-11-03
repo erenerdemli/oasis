@@ -26,8 +26,10 @@ import io.github.oasis.core.model.GameStatus;
 import io.github.oasis.core.services.annotations.ForAdmin;
 import io.github.oasis.core.services.annotations.ForPlayer;
 import io.github.oasis.core.services.api.controllers.AbstractController;
+import io.github.oasis.core.services.api.services.IEngineManager;
 import io.github.oasis.core.services.api.services.IGameService;
 import io.github.oasis.core.services.api.to.GameCreateRequest;
+import io.github.oasis.core.services.api.to.GameEnginesResponse;
 import io.github.oasis.core.services.api.to.GameUpdateRequest;
 import io.github.oasis.core.services.exceptions.OasisApiException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,9 +51,11 @@ import java.util.List;
 public class GamesController extends AbstractController {
 
     private final IGameService gameService;
+    private final IEngineManager engineManager;
 
-    public GamesController(IGameService gameService) {
+    public GamesController(IGameService gameService, IEngineManager engineManager) {
         this.gameService = gameService;
+        this.engineManager = engineManager;
     }
 
     @Operation(
@@ -133,6 +137,16 @@ public class GamesController extends AbstractController {
     @GetMapping(path = "/games/{gameId}/status")
     public GameStatus readGameCurrentStatus(@PathVariable("gameId") Integer gameId) {
         return gameService.getCurrentGameStatus(gameId);
+    }
+
+    @Operation(
+            summary = "Gets how many engines are reading the events of a game right now",
+            tags = {"admin"}
+    )
+    @ForAdmin
+    @GetMapping(path = "/games/{gameId}/engines")
+    public GameEnginesResponse readGameEngines(@PathVariable("gameId") Integer gameId) {
+        return new GameEnginesResponse(gameId, engineManager.countEnginesReading(gameId));
     }
 
     @Operation(
